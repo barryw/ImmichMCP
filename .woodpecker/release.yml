@@ -3,6 +3,9 @@ when:
   - event: push
     branch: main
 
+labels:
+  platform: linux/amd64
+
 steps:
   - name: test
     image: alpine
