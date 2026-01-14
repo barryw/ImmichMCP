@@ -36,14 +36,14 @@ steps:
 
         # Get latest tag
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-        echo "=== Latest tag is $LATEST_TAG ==="
+        echo "=== Latest tag: $LATEST_TAG ==="
 
         # Parse current version
         VERSION=$(echo "$LATEST_TAG" | sed 's/^v//')
         MAJOR=$(echo "$VERSION" | cut -d. -f1)
         MINOR=$(echo "$VERSION" | cut -d. -f2)
         PATCH=$(echo "$VERSION" | cut -d. -f3)
-        echo "Current version is $MAJOR.$MINOR.$PATCH"
+        echo "Current version: $MAJOR.$MINOR.$PATCH"
 
         # Get commits since last tag
         if [ "$LATEST_TAG" = "v0.0.0" ]; then
@@ -67,20 +67,20 @@ steps:
         BUMP="none"
 
         # Check for breaking changes (major bump)
-        if echo "$COMMITS" | grep -qE '^[a-z]+(\(.+\))?!:|BREAKING CHANGE'; then
+        if echo "$COMMITS" | grep -qE '^[a-z]+(\(.+\))?!:|BREAKING CHANGE:'; then
           BUMP="major"
           echo "Found breaking change commit"
         # Check for features (minor bump)
-        elif echo "$COMMITS" | grep -qE '^feat(\(.+\))?'; then
+        elif echo "$COMMITS" | grep -qE '^feat(\(.+\))?:'; then
           BUMP="minor"
           echo "Found feat commit"
         # Check for fixes or other conventional commits (patch bump)
-        elif echo "$COMMITS" | grep -qE '^(fix|perf|refactor|build|ci|docs|style|test)(\(.+\))?'; then
+        elif echo "$COMMITS" | grep -qE '^(fix|perf|refactor|build|ci|docs|style|test)(\(.+\))?:'; then
           BUMP="patch"
           echo "Found fix/patch commit"
         fi
 
-        echo "=== Bump type is $BUMP ==="
+        echo "=== Bump type: $BUMP ==="
 
         # Exit if no version bump needed
         if [ "$BUMP" = "none" ]; then
@@ -97,7 +97,7 @@ steps:
         esac
 
         NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-        echo "New version is $NEW_VERSION"
+        echo "New version: $NEW_VERSION"
 
         # Write version files for subsequent steps
         echo "$NEW_VERSION" > .version
@@ -164,12 +164,12 @@ steps:
         fi
 
         VERSION=$(cat .version)
-        echo "Building Docker image version $VERSION"
+        echo "Building Docker image version: $VERSION"
         mkdir -p /kaniko/.docker
         echo "{\"auths\":{\"ghcr.io\":{\"username\":\"$GHCR_USERNAME\",\"password\":\"$GHCR_TOKEN\"}}}" > /kaniko/.docker/config.json
         /kaniko/executor \
-          --context="$CI_WORKSPACE" \
-          --dockerfile="$CI_WORKSPACE/Dockerfile" \
+          --context="$CI_WORKSPACE/ImmichMCP" \
+          --dockerfile="$CI_WORKSPACE/ImmichMCP/Dockerfile" \
           --destination="ghcr.io/barryw/immichmcp:v$VERSION" \
           --destination="ghcr.io/barryw/immichmcp:latest" \
           --build-arg="VERSION=$VERSION"

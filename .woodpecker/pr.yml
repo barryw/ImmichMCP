@@ -1,12 +1,19 @@
-# PR Pipeline - Validate commits and run tests
+# Pull Request Pipeline - Build and test only
 when:
   - event: pull_request
 
 labels:
   platform: linux/amd64
 
+clone:
+  - name: clone
+    image: woodpeckerci/plugin-git
+    settings:
+      lfs: false
+      depth: 50
+
 steps:
-  # Validate conventional commit format
+  # Validate commit messages follow conventional commits
   - name: commitlint
     image: node:22-alpine
     commands:
@@ -14,13 +21,13 @@ steps:
       - |
         echo "module.exports = { extends: ['@commitlint/config-conventional'] };" > commitlint.config.js
       - |
-        # Get the PR commits and validate them
-        git log --format=%s origin/${CI_COMMIT_TARGET_BRANCH}..HEAD | while read -r msg; do
-          echo "Validating commit message"
-          echo "$msg" | commitlint
+        # Check all commits in the PR
+        git log --format=%s origin/main..HEAD | while read -r msg; do
+          echo "Checking: $msg"
+          echo "$msg" | commitlint || exit 1
         done
+      - echo "All commits follow conventional commit format"
 
-  # Build and run tests
   - name: build-and-test
     image: mcr.microsoft.com/dotnet/sdk:10.0
     commands:
