@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  immichmcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: immichmcp
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - IMMICH_BASE_URL=${IMMICH_BASE_URL:-http://immich-server:2283}
+      - IMMICH_API_KEY=${IMMICH_API_KEY}
+      - MCP_LOG_LEVEL=${MCP_LOG_LEVEL:-Information}
+      - DOWNLOAD_MODE=${DOWNLOAD_MODE:-url}
+      - MAX_PAGE_SIZE=${MAX_PAGE_SIZE:-100}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# Example with Immich network integration
+# Uncomment if running alongside Immich
+#    networks:
+#      - immich
+#
+#networks:
+#  immich:
+#    external: true
