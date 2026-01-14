@@ -168,8 +168,8 @@ steps:
         mkdir -p /kaniko/.docker
         echo "{\"auths\":{\"ghcr.io\":{\"username\":\"$GHCR_USERNAME\",\"password\":\"$GHCR_TOKEN\"}}}" > /kaniko/.docker/config.json
         /kaniko/executor \
-          --context="$CI_WORKSPACE/ImmichMCP" \
-          --dockerfile="$CI_WORKSPACE/ImmichMCP/Dockerfile" \
+          --context="$CI_WORKSPACE" \
+          --dockerfile="$CI_WORKSPACE/Dockerfile" \
           --destination="ghcr.io/barryw/immichmcp:v$VERSION" \
           --destination="ghcr.io/barryw/immichmcp:latest" \
           --build-arg="VERSION=$VERSION"
