@@ -204,6 +204,7 @@ public class ImmichClient
         var fileStreamContent = new ByteArrayContent(fileContent);
         formContent.Add(fileStreamContent, "assetData", fileName);
         formContent.Add(new StringContent(deviceAssetId), "deviceAssetId");
+        formContent.Add(new StringContent("mcp-server"), "deviceId");
         formContent.Add(new StringContent(deviceModifiedAt.ToString("O")), "deviceModifiedAt");
         formContent.Add(new StringContent(DateTime.UtcNow.ToString("O")), "fileCreatedAt");
         formContent.Add(new StringContent(DateTime.UtcNow.ToString("O")), "fileModifiedAt");
