@@ -8,4 +8,4 @@ steps:
     image: alpine
     commands:
       - echo "Pipeline is working!"
-      - echo "Branch: $CI_COMMIT_BRANCH"
+      - echo "Branch is $CI_COMMIT_BRANCH"
