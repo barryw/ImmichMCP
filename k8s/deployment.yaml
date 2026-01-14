@@ -31,12 +31,14 @@ spec:
                 secretKeyRef:
                   name: immich-token
                   key: token
+            - name: MCP_PUBLIC_URL
+              value: "http://immich-mcp.lan"
           resources:
             requests:
-              memory: "128Mi"
+              memory: "256Mi"
               cpu: "100m"
             limits:
-              memory: "256Mi"
+              memory: "512Mi"
               cpu: "500m"
           livenessProbe:
             tcpSocket:

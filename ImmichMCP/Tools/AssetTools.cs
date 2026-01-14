@@ -235,7 +235,7 @@ public static class AssetTools
     }
 
     [McpServerTool(Name = "immich.assets.upload_from_path")]
-    [Description("Upload an asset from a local file path. More reliable for large files. Includes automatic retries.")]
+    [Description("Upload an asset from a file path accessible to the MCP server. NOTE: Only works when the MCP server can access the path (e.g., stdio mode or shared filesystem). For remote HTTP mode, use immich.assets.upload with base64 content instead.")]
     public static async Task<string> UploadFromPath(
         ImmichClient client,
         [Description("Absolute path to the file to upload")] string filePath,

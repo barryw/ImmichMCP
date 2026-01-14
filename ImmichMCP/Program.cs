@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using ImmichMCP.Client;
 using ImmichMCP.Configuration;
+using ImmichMCP.Services;
 using Polly;
 using Polly.Extensions.Http;
 
@@ -36,6 +37,9 @@ else
 
     ConfigureServices(builder.Services, builder.Configuration);
 
+    // Register upload session service as singleton
+    builder.Services.AddSingleton<UploadSessionService>();
+
     builder.Services
         .AddMcpServer()
         .WithHttpTransport(options =>
@@ -52,8 +56,120 @@ else
 
     app.MapMcp("/mcp");
 
+    // Out-of-band upload endpoint
+    app.MapPost("/upload/{sessionId}", async (
+        string sessionId,
+        HttpRequest request,
+        UploadSessionService uploadService,
+        ImmichClient immichClient,
+        ILogger<Program> logger) =>
+    {
+        var session = uploadService.GetSession(sessionId);
+
+        if (session == null)
+        {
+            return Results.NotFound(new { error = "Session not found", session_id = sessionId });
+        }
+
+        if (session.Status == UploadStatus.Expired)
+        {
+            return Results.BadRequest(new { error = "Session expired", session_id = sessionId });
+        }
+
+        if (session.Status == UploadStatus.Completed)
+        {
+            return Results.BadRequest(new { error = "Session already completed", asset_id = session.AssetId });
+        }
+
+        if (!request.HasFormContentType)
+        {
+            return Results.BadRequest(new { error = "Expected multipart/form-data" });
+        }
+
+        try
+        {
+            uploadService.UpdateSession(sessionId, s => s.Status = UploadStatus.Uploading);
+
+            var form = await request.ReadFormAsync();
+            var file = form.Files.GetFile("file") ?? form.Files.FirstOrDefault();
+
+            if (file == null || file.Length == 0)
+            {
+                uploadService.UpdateSession(sessionId, s =>
+                {
+                    s.Status = UploadStatus.Failed;
+                    s.Error = "No file provided";
+                });
+                return Results.BadRequest(new { error = "No file provided in form data. Use field name 'file'." });
+            }
+
+            var fileName = session.FileName ?? file.FileName;
+            logger.LogInformation("Receiving upload: {FileName} ({Size} bytes) for session {SessionId}",
+                fileName, file.Length, sessionId);
+
+            // Read file into memory
+            using var memoryStream = new MemoryStream();
+            await file.CopyToAsync(memoryStream);
+            var fileBytes = memoryStream.ToArray();
+
+            // Generate device asset ID
+            var deviceAssetId = $"{fileName}-{fileBytes.Length}-{DateTime.UtcNow.Ticks}";
+
+            // Upload to Immich
+            var asset = await immichClient.UploadAssetAsync(
+                fileBytes,
+                fileName,
+                deviceAssetId,
+                DateTime.UtcNow,
+                session.IsFavorite,
+                session.IsArchived
+            );
+
+            if (asset == null)
+            {
+                uploadService.UpdateSession(sessionId, s =>
+                {
+                    s.Status = UploadStatus.Failed;
+                    s.Error = "Failed to upload to Immich";
+                });
+                return Results.Json(new { error = "Failed to upload asset to Immich" }, statusCode: 502);
+            }
+
+            uploadService.UpdateSession(sessionId, s =>
+            {
+                s.Status = UploadStatus.Completed;
+                s.AssetId = asset.Id;
+            });
+
+            logger.LogInformation("Upload complete: {FileName} -> asset {AssetId}", fileName, asset.Id);
+
+            return Results.Ok(new
+            {
+                success = true,
+                asset_id = asset.Id,
+                original_file_name = asset.OriginalFileName,
+                type = asset.Type,
+                session_id = sessionId
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Upload failed for session {SessionId}", sessionId);
+            uploadService.UpdateSession(sessionId, s =>
+            {
+                s.Status = UploadStatus.Failed;
+                s.Error = ex.Message;
+            });
+            return Results.Json(new { error = ex.Message, session_id = sessionId }, statusCode: 500);
+        }
+    }).DisableAntiforgery();
+
+    // Health check endpoint
+    app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+
     app.Logger.LogInformation("ImmichMCP server starting on port {Port}", port);
     app.Logger.LogInformation("MCP endpoint available at: http://localhost:{Port}/mcp", port);
+    app.Logger.LogInformation("Upload endpoint available at: http://localhost:{Port}/upload/{{sessionId}}", port);
 
     await app.RunAsync($"http://0.0.0.0:{port}");
 }
