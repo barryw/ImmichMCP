@@ -27,7 +27,8 @@ public class ImmichClient
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
     public ImmichClient(HttpClient httpClient, IOptions<ImmichOptions> options, ILogger<ImmichClient> logger)

@@ -38,7 +38,11 @@ else
 
     builder.Services
         .AddMcpServer()
-        .WithHttpTransport()
+        .WithHttpTransport(options =>
+        {
+            // Increase idle timeout to 24 hours to prevent session drops during long operations
+            options.IdleTimeout = TimeSpan.FromHours(24);
+        })
         .WithToolsFromAssembly();
 
     var app = builder.Build();
