@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: immich-mcp
+  labels:
+    app: immich-mcp
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: immich-mcp.lan
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: immich-mcp
+                port:
+                  number: 5000

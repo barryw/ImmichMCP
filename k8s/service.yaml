@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich-mcp
+  labels:
+    app: immich-mcp
+spec:
+  type: ClusterIP
+  selector:
+    app: immich-mcp
+  ports:
+    - port: 5000
+      targetPort: 5000
+      protocol: TCP
+      name: http

@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-mcp
+  labels:
+    app: immich-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: immich-mcp
+  template:
+    metadata:
+      labels:
+        app: immich-mcp
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: immich-mcp
+          image: ghcr.io/barryw/immichmcp:latest
+          ports:
+            - containerPort: 5000
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: immich-mcp
+          env:
+            - name: IMMICH_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: immich-token
+                  key: token
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          livenessProbe:
+            tcpSocket:
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
