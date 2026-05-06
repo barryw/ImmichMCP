@@ -113,7 +113,7 @@ public record MetadataSearchRequest
 public record SmartSearchRequest
 {
     [JsonPropertyName("query")]
-    public string Query { get; init; } = string.Empty;
+    public string? Query { get; init; }
 
     [JsonPropertyName("page")]
     public int? Page { get; init; }
@@ -159,6 +159,9 @@ public record SmartSearchRequest
 
     [JsonPropertyName("personIds")]
     public string[]? PersonIds { get; init; }
+
+    [JsonPropertyName("ocr")]
+    public string? Ocr { get; init; }
 }
 
 /// <summary>
