@@ -171,7 +171,7 @@ public static class SearchTools
             return JsonSerializer.Serialize(errorResponse);
         }
 
-        var request = new SmartSearchRequest
+        var request = new MetadataSearchRequest
         {
             Ocr = text,
             Page = page,
@@ -186,10 +186,11 @@ public static class SearchTools
             Country = country,
             Make = make,
             Model = model,
-            PersonIds = ParseStringArray(personIds)
+            PersonIds = ParseStringArray(personIds),
+            WithExif = true
         };
 
-        var result = await client.SearchSmartAsync(request).ConfigureAwait(false);
+        var result = await client.SearchMetadataAsync(request).ConfigureAwait(false);
 
         var summaries = result.Items.Select(AssetSummary.FromAsset).ToList();
 

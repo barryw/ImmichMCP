@@ -86,7 +86,7 @@ public class SearchToolsTests
         };
 
         string? capturedRequestBody = null;
-        handler.When(HttpMethod.Post, "*/search/smart")
+        handler.When(HttpMethod.Post, "*/search/metadata")
             .With(req =>
             {
                 capturedRequestBody = req.Content!.ReadAsStringAsync().Result;
@@ -102,7 +102,7 @@ public class SearchToolsTests
         capturedRequestBody.Should().Contain("\"ocr\":\"factuur 2026\"",
             "OcrSearch must forward the text under the 'ocr' field");
         capturedRequestBody.Should().NotContain("\"query\"",
-            "OcrSearch should not send a CLIP query");
+            "OcrSearch must use the metadata endpoint, which has no CLIP query");
     }
 
     [Fact]

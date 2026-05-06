@@ -105,6 +105,9 @@ public record MetadataSearchRequest
 
     [JsonPropertyName("order")]
     public string? Order { get; init; }
+
+    [JsonPropertyName("ocr")]
+    public string? Ocr { get; init; }
 }
 
 /// <summary>
@@ -113,7 +116,7 @@ public record MetadataSearchRequest
 public record SmartSearchRequest
 {
     [JsonPropertyName("query")]
-    public string? Query { get; init; }
+    public string Query { get; init; } = string.Empty;
 
     [JsonPropertyName("page")]
     public int? Page { get; init; }
@@ -159,9 +162,6 @@ public record SmartSearchRequest
 
     [JsonPropertyName("personIds")]
     public string[]? PersonIds { get; init; }
-
-    [JsonPropertyName("ocr")]
-    public string? Ocr { get; init; }
 }
 
 /// <summary>
