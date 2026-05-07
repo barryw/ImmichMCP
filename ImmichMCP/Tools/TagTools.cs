@@ -14,7 +14,7 @@ namespace ImmichMCP.Tools;
 [McpServerToolType]
 public static class TagTools
 {
-    [McpServerTool(Name = "immich.tags.list")]
+    [McpServerTool(Name = "immich_tags_list")]
     [Description("List all tags.")]
     public static async Task<string> List(ImmichClient client)
     {
@@ -33,7 +33,7 @@ public static class TagTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.tags.get")]
+    [McpServerTool(Name = "immich_tags_get")]
     [Description("Get tag by ID.")]
     public static async Task<string> Get(
         ImmichClient client,
@@ -58,7 +58,7 @@ public static class TagTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.tags.create")]
+    [McpServerTool(Name = "immich_tags_create")]
     [Description("Create a new tag.")]
     public static async Task<string> Create(
         ImmichClient client,
@@ -100,7 +100,7 @@ public static class TagTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.tags.update")]
+    [McpServerTool(Name = "immich_tags_update")]
     [Description("Update a tag.")]
     public static async Task<string> Update(
         ImmichClient client,
@@ -133,7 +133,7 @@ public static class TagTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.tags.delete")]
+    [McpServerTool(Name = "immich_tags_delete")]
     [Description("Delete a tag. Requires explicit confirmation.")]
     public static async Task<string> Delete(
         ImmichClient client,
@@ -187,7 +187,7 @@ public static class TagTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.tags.assets.add")]
+    [McpServerTool(Name = "immich_tags_assets_add")]
     [Description("Tag assets with a specific tag.")]
     public static async Task<string> TagAssets(
         ImmichClient client,
@@ -234,7 +234,7 @@ public static class TagTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.tags.assets.remove")]
+    [McpServerTool(Name = "immich_tags_assets_remove")]
     [Description("Remove tag from assets.")]
     public static async Task<string> UntagAssets(
         ImmichClient client,

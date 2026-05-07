@@ -15,7 +15,7 @@ namespace ImmichMCP.Tools;
 [McpServerToolType]
 public static class PeopleTools
 {
-    [McpServerTool(Name = "immich.people.list")]
+    [McpServerTool(Name = "immich_people_list")]
     [Description("List all recognized people in the library.")]
     public static async Task<string> List(
         ImmichClient client,
@@ -72,7 +72,7 @@ public static class PeopleTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.people.get")]
+    [McpServerTool(Name = "immich_people_get")]
     [Description("Get person details by ID.")]
     public static async Task<string> Get(
         ImmichClient client,
@@ -97,7 +97,7 @@ public static class PeopleTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.people.update")]
+    [McpServerTool(Name = "immich_people_update")]
     [Description("Update person information (name, birth date, hidden status).")]
     public static async Task<string> Update(
         ImmichClient client,
@@ -138,7 +138,7 @@ public static class PeopleTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.people.merge")]
+    [McpServerTool(Name = "immich_people_merge")]
     [Description("Merge multiple people into one (for duplicate face clusters).")]
     public static async Task<string> Merge(
         ImmichClient client,
@@ -210,7 +210,7 @@ public static class PeopleTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.people.assets")]
+    [McpServerTool(Name = "immich_people_assets")]
     [Description("List assets containing a specific person.")]
     public static async Task<string> Assets(
         ImmichClient client,
