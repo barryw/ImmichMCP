@@ -14,7 +14,7 @@ namespace ImmichMCP.Tools;
 [McpServerToolType]
 public static class AlbumTools
 {
-    [McpServerTool(Name = "immich.albums.list")]
+    [McpServerTool(Name = "immich_albums_list")]
     [Description("List all albums with optional filters.")]
     public static async Task<string> List(
         ImmichClient client,
@@ -36,7 +36,7 @@ public static class AlbumTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.albums.get")]
+    [McpServerTool(Name = "immich_albums_get")]
     [Description("Get album details by ID.")]
     public static async Task<string> Get(
         ImmichClient client,
@@ -62,7 +62,7 @@ public static class AlbumTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.albums.create")]
+    [McpServerTool(Name = "immich_albums_create")]
     [Description("Create a new album.")]
     public static async Task<string> Create(
         ImmichClient client,
@@ -108,7 +108,7 @@ public static class AlbumTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.albums.update")]
+    [McpServerTool(Name = "immich_albums_update")]
     [Description("Update album metadata (name, description).")]
     public static async Task<string> Update(
         ImmichClient client,
@@ -145,7 +145,7 @@ public static class AlbumTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.albums.assets.add")]
+    [McpServerTool(Name = "immich_albums_assets_add")]
     [Description("Add assets to an album.")]
     public static async Task<string> AddAssets(
         ImmichClient client,
@@ -192,7 +192,7 @@ public static class AlbumTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.albums.assets.remove")]
+    [McpServerTool(Name = "immich_albums_assets_remove")]
     [Description("Remove assets from an album.")]
     public static async Task<string> RemoveAssets(
         ImmichClient client,
@@ -239,7 +239,7 @@ public static class AlbumTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.albums.delete")]
+    [McpServerTool(Name = "immich_albums_delete")]
     [Description("Delete an album. Requires explicit confirmation.")]
     public static async Task<string> Delete(
         ImmichClient client,
@@ -294,7 +294,7 @@ public static class AlbumTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.albums.statistics")]
+    [McpServerTool(Name = "immich_albums_statistics")]
     [Description("Get album statistics (owned, shared, not shared counts).")]
     public static async Task<string> Statistics(ImmichClient client)
     {
