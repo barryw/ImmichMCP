@@ -24,7 +24,7 @@ public class UploadTools
         _options = options.Value;
     }
 
-    [McpServerTool(Name = "immich.assets.upload_init")]
+    [McpServerTool(Name = "immich_assets_upload_init")]
     [Description("Initialize an out-of-band file upload. Returns an upload URL where you can POST the file directly. Use this for uploading files when the MCP server cannot access the local filesystem.")]
     public string UploadInit(
         ImmichClient client,
@@ -60,7 +60,7 @@ public class UploadTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.assets.upload_status")]
+    [McpServerTool(Name = "immich_assets_upload_status")]
     [Description("Check the status of an upload session.")]
     public string UploadStatus(
         ImmichClient client,

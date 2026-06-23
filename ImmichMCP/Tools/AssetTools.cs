@@ -14,7 +14,7 @@ namespace ImmichMCP.Tools;
 [McpServerToolType]
 public static class AssetTools
 {
-    [McpServerTool(Name = "immich.assets.list")]
+    [McpServerTool(Name = "immich_assets_list")]
     [Description("List recent assets with optional filters and pagination.")]
     public static async Task<string> List(
         ImmichClient client,
@@ -47,7 +47,7 @@ public static class AssetTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.assets.get")]
+    [McpServerTool(Name = "immich_assets_get")]
     [Description("Get full asset metadata by ID.")]
     public static async Task<string> Get(
         ImmichClient client,
@@ -72,7 +72,7 @@ public static class AssetTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.assets.exif")]
+    [McpServerTool(Name = "immich_assets_exif")]
     [Description("Get EXIF metadata for an asset.")]
     public static async Task<string> GetExif(
         ImmichClient client,
@@ -107,7 +107,7 @@ public static class AssetTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.assets.download.original")]
+    [McpServerTool(Name = "immich_assets_download_original")]
     [Description("Get download URL for the original asset file.")]
     public static async Task<string> DownloadOriginal(
         ImmichClient client,
@@ -141,7 +141,7 @@ public static class AssetTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.assets.download.thumbnail")]
+    [McpServerTool(Name = "immich_assets_download_thumbnail")]
     [Description("Get thumbnail and preview URLs for an asset.")]
     public static async Task<string> DownloadThumbnail(
         ImmichClient client,
@@ -175,8 +175,8 @@ public static class AssetTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.assets.upload")]
-    [Description("Upload a new asset from base64-encoded content. For large files, use immich.assets.upload_from_path instead.")]
+    [McpServerTool(Name = "immich_assets_upload")]
+    [Description("Upload a new asset from base64-encoded content. For large files, use immich_assets_upload_from_path instead.")]
     public static async Task<string> Upload(
         ImmichClient client,
         [Description("Base64-encoded file content")] string fileContent,
@@ -234,8 +234,8 @@ public static class AssetTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.assets.upload_from_path")]
-    [Description("Upload an asset from a file path accessible to the MCP server. NOTE: Only works when the MCP server can access the path (e.g., stdio mode or shared filesystem). For remote HTTP mode, use immich.assets.upload with base64 content instead.")]
+    [McpServerTool(Name = "immich_assets_upload_from_path")]
+    [Description("Upload an asset from a file path accessible to the MCP server. NOTE: Only works when the MCP server can access the path (e.g., stdio mode or shared filesystem). For remote HTTP mode, use immich_assets_upload with base64 content instead.")]
     public static async Task<string> UploadFromPath(
         ImmichClient client,
         [Description("Absolute path to the file to upload")] string filePath,
@@ -302,7 +302,7 @@ public static class AssetTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.assets.update")]
+    [McpServerTool(Name = "immich_assets_update")]
     [Description("Update asset metadata (favorite status, description, date, location, etc.).")]
     public static async Task<string> Update(
         ImmichClient client,
@@ -345,7 +345,7 @@ public static class AssetTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.assets.bulk_update")]
+    [McpServerTool(Name = "immich_assets_bulk_update")]
     [Description("Perform bulk operations on multiple assets. Supports dry run mode.")]
     public static async Task<string> BulkUpdate(
         ImmichClient client,
@@ -420,7 +420,7 @@ public static class AssetTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.assets.delete")]
+    [McpServerTool(Name = "immich_assets_delete")]
     [Description("Delete asset(s). Requires explicit confirmation.")]
     public static async Task<string> Delete(
         ImmichClient client,
@@ -499,7 +499,7 @@ public static class AssetTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.assets.statistics")]
+    [McpServerTool(Name = "immich_assets_statistics")]
     [Description("Get asset statistics (count of images, videos, total).")]
     public static async Task<string> Statistics(ImmichClient client)
     {

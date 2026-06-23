@@ -100,86 +100,86 @@ Or with Docker:
 
 | Tool | Description |
 |------|-------------|
-| `immich.ping` | Verify connectivity and return server version |
-| `immich.capabilities` | List available API features |
+| `immich_ping` | Verify connectivity and return server version |
+| `immich_capabilities` | List available API features |
 
 ### Assets
 
 | Tool | Description |
 |------|-------------|
-| `immich.assets.list` | List recent assets with filters |
-| `immich.assets.get` | Get full asset metadata |
-| `immich.assets.exif` | Get EXIF data for an asset |
-| `immich.assets.download.original` | Get download URL for original |
-| `immich.assets.download.thumbnail` | Get thumbnail/preview URLs |
-| `immich.assets.upload` | Upload asset (base64) |
-| `immich.assets.upload_from_path` | Upload from local file path |
-| `immich.assets.update` | Update asset metadata |
-| `immich.assets.bulk_update` | Bulk update multiple assets |
-| `immich.assets.delete` | Delete asset(s) |
-| `immich.assets.statistics` | Get asset statistics |
+| `immich_assets_list` | List recent assets with filters |
+| `immich_assets_get` | Get full asset metadata |
+| `immich_assets_exif` | Get EXIF data for an asset |
+| `immich_assets_download_original` | Get download URL for original |
+| `immich_assets_download_thumbnail` | Get thumbnail/preview URLs |
+| `immich_assets_upload` | Upload asset (base64) |
+| `immich_assets_upload_from_path` | Upload from local file path |
+| `immich_assets_update` | Update asset metadata |
+| `immich_assets_bulk_update` | Bulk update multiple assets |
+| `immich_assets_delete` | Delete asset(s) |
+| `immich_assets_statistics` | Get asset statistics |
 
 ### Search
 
 | Tool | Description |
 |------|-------------|
-| `immich.search.metadata` | Search by metadata filters |
-| `immich.search.smart` | ML-based semantic search (CLIP) |
-| `immich.search.explore` | Get explore/discovery data |
+| `immich_search_metadata` | Search by metadata filters |
+| `immich_search_smart` | ML-based semantic search (CLIP) |
+| `immich_search_explore` | Get explore/discovery data |
 
 ### Albums
 
 | Tool | Description |
 |------|-------------|
-| `immich.albums.list` | List all albums |
-| `immich.albums.get` | Get album details |
-| `immich.albums.create` | Create new album |
-| `immich.albums.update` | Update album metadata |
-| `immich.albums.assets.add` | Add assets to album |
-| `immich.albums.assets.remove` | Remove assets from album |
-| `immich.albums.delete` | Delete album |
-| `immich.albums.statistics` | Get album statistics |
+| `immich_albums_list` | List all albums |
+| `immich_albums_get` | Get album details |
+| `immich_albums_create` | Create new album |
+| `immich_albums_update` | Update album metadata |
+| `immich_albums_assets_add` | Add assets to album |
+| `immich_albums_assets_remove` | Remove assets from album |
+| `immich_albums_delete` | Delete album |
+| `immich_albums_statistics` | Get album statistics |
 
 ### People
 
 | Tool | Description |
 |------|-------------|
-| `immich.people.list` | List all recognized people |
-| `immich.people.get` | Get person details |
-| `immich.people.update` | Update person info |
-| `immich.people.merge` | Merge duplicate people |
-| `immich.people.assets` | List assets for a person |
+| `immich_people_list` | List all recognized people |
+| `immich_people_get` | Get person details |
+| `immich_people_update` | Update person info |
+| `immich_people_merge` | Merge duplicate people |
+| `immich_people_assets` | List assets for a person |
 
 ### Tags
 
 | Tool | Description |
 |------|-------------|
-| `immich.tags.list` | List all tags |
-| `immich.tags.get` | Get tag by ID |
-| `immich.tags.create` | Create new tag |
-| `immich.tags.update` | Update tag |
-| `immich.tags.delete` | Delete tag |
-| `immich.tags.assets.add` | Tag assets |
-| `immich.tags.assets.remove` | Remove tag from assets |
+| `immich_tags_list` | List all tags |
+| `immich_tags_get` | Get tag by ID |
+| `immich_tags_create` | Create new tag |
+| `immich_tags_update` | Update tag |
+| `immich_tags_delete` | Delete tag |
+| `immich_tags_assets_add` | Tag assets |
+| `immich_tags_assets_remove` | Remove tag from assets |
 
 ### Shared Links
 
 | Tool | Description |
 |------|-------------|
-| `immich.shared_links.list` | List all shared links |
-| `immich.shared_links.get` | Get shared link details |
-| `immich.shared_links.create` | Create shared link |
-| `immich.shared_links.update` | Update shared link |
-| `immich.shared_links.delete` | Delete shared link |
+| `immich_shared_links_list` | List all shared links |
+| `immich_shared_links_get` | Get shared link details |
+| `immich_shared_links_create` | Create shared link |
+| `immich_shared_links_update` | Update shared link |
+| `immich_shared_links_delete` | Delete shared link |
 
 ### Activities
 
 | Tool | Description |
 |------|-------------|
-| `immich.activities.list` | List comments/likes |
-| `immich.activities.create` | Add comment or like |
-| `immich.activities.delete` | Delete activity |
-| `immich.activities.statistics` | Get activity statistics |
+| `immich_activities_list` | List comments/likes |
+| `immich_activities_create` | Add comment or like |
+| `immich_activities_delete` | Delete activity |
+| `immich_activities_statistics` | Get activity statistics |
 
 ## Example Usage
 

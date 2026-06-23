@@ -13,7 +13,7 @@ namespace ImmichMCP.Tools;
 [McpServerToolType]
 public static class ActivityTools
 {
-    [McpServerTool(Name = "immich.activities.list")]
+    [McpServerTool(Name = "immich_activities_list")]
     [Description("List activities (comments and likes) for an album or asset.")]
     public static async Task<string> List(
         ImmichClient client,
@@ -47,7 +47,7 @@ public static class ActivityTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.activities.create")]
+    [McpServerTool(Name = "immich_activities_create")]
     [Description("Create a comment or like on an album or asset.")]
     public static async Task<string> Create(
         ImmichClient client,
@@ -123,7 +123,7 @@ public static class ActivityTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.activities.delete")]
+    [McpServerTool(Name = "immich_activities_delete")]
     [Description("Delete an activity (comment or like).")]
     public static async Task<string> Delete(
         ImmichClient client,
@@ -160,7 +160,7 @@ public static class ActivityTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.activities.statistics")]
+    [McpServerTool(Name = "immich_activities_statistics")]
     [Description("Get activity statistics (comment count) for an album or asset.")]
     public static async Task<string> Statistics(
         ImmichClient client,
