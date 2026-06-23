@@ -125,6 +125,7 @@ Or with Docker:
 |------|-------------|
 | `immich_search_metadata` | Search by metadata filters |
 | `immich_search_smart` | ML-based semantic search (CLIP) |
+| `immich_search_ocr` | OCR text search inside images |
 | `immich_search_explore` | Get explore/discovery data |
 
 ### Albums

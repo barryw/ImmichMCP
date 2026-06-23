@@ -105,6 +105,9 @@ public record MetadataSearchRequest
 
     [JsonPropertyName("order")]
     public string? Order { get; init; }
+
+    [JsonPropertyName("ocr")]
+    public string? Ocr { get; init; }
 }
 
 /// <summary>
