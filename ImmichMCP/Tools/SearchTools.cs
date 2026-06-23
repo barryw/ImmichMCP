@@ -15,7 +15,7 @@ namespace ImmichMCP.Tools;
 [McpServerToolType]
 public static class SearchTools
 {
-    [McpServerTool(Name = "immich.search.metadata")]
+    [McpServerTool(Name = "immich_search_metadata")]
     [Description("Search assets by metadata filters (dates, type, location, camera, person, etc.).")]
     public static async Task<string> MetadataSearch(
         ImmichClient client,
@@ -77,7 +77,7 @@ public static class SearchTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.search.smart")]
+    [McpServerTool(Name = "immich_search_smart")]
     [Description("ML-based semantic search using CLIP. Search using natural language queries like 'sunset at the beach' or 'birthday cake'.")]
     public static async Task<string> SmartSearch(
         ImmichClient client,
@@ -142,7 +142,7 @@ public static class SearchTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.search.ocr")]
+    [McpServerTool(Name = "immich_search_ocr")]
     [Description("OCR search: find assets by text recognised inside images (signs, documents, receipts, screenshots). Requires Immich 2.2+ with OCR enabled on the ML container.")]
     public static async Task<string> OcrSearch(
         ImmichClient client,
@@ -208,7 +208,7 @@ public static class SearchTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.search.explore")]
+    [McpServerTool(Name = "immich_search_explore")]
     [Description("Get explore/discovery data showing popular places, things, and people from your library.")]
     public static async Task<string> Explore(ImmichClient client)
     {

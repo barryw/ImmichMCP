@@ -12,7 +12,7 @@ namespace ImmichMCP.Tools;
 [McpServerToolType]
 public static class HealthTools
 {
-    [McpServerTool(Name = "immich.ping")]
+    [McpServerTool(Name = "immich_ping")]
     [Description("Verify connectivity and authentication with the Immich instance. Returns server version if available.")]
     public static async Task<string> Ping(ImmichClient client)
     {
@@ -43,7 +43,7 @@ public static class HealthTools
         return JsonSerializer.Serialize(errorResponse);
     }
 
-    [McpServerTool(Name = "immich.capabilities")]
+    [McpServerTool(Name = "immich_capabilities")]
     [Description("Return supported API features and detected Immich server capabilities.")]
     public static async Task<string> GetCapabilities(ImmichClient client)
     {

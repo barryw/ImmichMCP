@@ -14,7 +14,7 @@ namespace ImmichMCP.Tools;
 [McpServerToolType]
 public static class SharedLinkTools
 {
-    [McpServerTool(Name = "immich.shared_links.list")]
+    [McpServerTool(Name = "immich_shared_links_list")]
     [Description("List all shared links.")]
     public static async Task<string> List(ImmichClient client)
     {
@@ -33,7 +33,7 @@ public static class SharedLinkTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.shared_links.get")]
+    [McpServerTool(Name = "immich_shared_links_get")]
     [Description("Get shared link by ID.")]
     public static async Task<string> Get(
         ImmichClient client,
@@ -75,7 +75,7 @@ public static class SharedLinkTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.shared_links.create")]
+    [McpServerTool(Name = "immich_shared_links_create")]
     [Description("Create a new shared link for an album or assets.")]
     public static async Task<string> Create(
         ImmichClient client,
@@ -157,7 +157,7 @@ public static class SharedLinkTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.shared_links.update")]
+    [McpServerTool(Name = "immich_shared_links_update")]
     [Description("Update shared link settings (expiry, permissions, etc.).")]
     public static async Task<string> Update(
         ImmichClient client,
@@ -213,7 +213,7 @@ public static class SharedLinkTools
         return JsonSerializer.Serialize(response);
     }
 
-    [McpServerTool(Name = "immich.shared_links.delete")]
+    [McpServerTool(Name = "immich_shared_links_delete")]
     [Description("Delete a shared link. Requires explicit confirmation.")]
     public static async Task<string> Delete(
         ImmichClient client,
