@@ -4,8 +4,6 @@
 #   github_username -> GHCR username
 #   github_token    -> GHCR token and GitHub token with write access to barryw/ImmichMCP
 #                    and barryw/infrastructure
-# Optional Woodpecker secrets:
-#   immich_api_key  -> runs read-only integration tests against in-cluster Immich before deploy
 when:
   - event: push
     branch: main
@@ -172,8 +170,6 @@ steps:
   - name: integration-test
     image: mcr.microsoft.com/dotnet/sdk:10.0
     environment:
-      IMMICH_API_KEY:
-        from_secret: immich_api_key
       IMMICH_BASE_URL: http://immich-server.default.svc.cluster.local:2283
       IMMICH_INTEGRATION_EXPECTED_MAJOR: "3"
     commands:
@@ -185,7 +181,7 @@ steps:
         fi
 
         if [ -z "${IMMICH_API_KEY:-}" ]; then
-          echo "Woodpecker secret immich_api_key is not configured; skipping integration tests"
+          echo "IMMICH_API_KEY is not injected into this runner; skipping direct Immich API integration tests"
           exit 0
         fi
 

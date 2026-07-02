@@ -91,11 +91,7 @@ Required Woodpecker secrets:
 | `github_username` | GHCR username |
 | `github_token` | GHCR token plus GitHub write access to `barryw/ImmichMCP` and `barryw/infrastructure` |
 
-Optional Woodpecker secret:
-
-| Secret | Purpose |
-|--------|---------|
-| `immich_api_key` | Runs read-only integration tests against `http://immich-server.default.svc.cluster.local:2283` before image publish/deploy |
+The direct Immich API integration step runs before image publish only when `IMMICH_API_KEY` is already injected into the runner environment. The required deployment verification does not need that key; it exercises the Argo-managed MCP service after the GitOps commit reconciles.
 
 ## Installation
 
