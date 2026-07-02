@@ -443,12 +443,10 @@ steps:
         for attempt in $(seq 1 30); do
           RESULTS_DIR="TestResults/mcp-gateway"
           rm -rf "$RESULTS_DIR"
-          if dotnet test ImmichMCP.Tests/ImmichMCP.Tests.csproj \
-            -c Release \
-            --no-restore \
-            --logger "console;verbosity=normal" \
-            --logger "trx;LogFileName=mcp-gateway.trx" \
-            --results-directory "$RESULTS_DIR"; then
+          if dotnet vstest ImmichMCP.Tests/bin/Release/net10.0/ImmichMCP.Tests.dll \
+            --logger:"console;verbosity=normal" \
+            --logger:"trx;LogFileName=mcp-gateway.trx" \
+            --ResultsDirectory:"$RESULTS_DIR"; then
             if grep -q 'testName="ImmichMCP.Tests.Integration.ImmichMcpGatewayIntegrationTests.GatewayModeEnablesHealthToolsAndPingsImmich"[^>]*outcome="Passed"' "$RESULTS_DIR/mcp-gateway.trx"; then
               echo "GitOps deploy verified through MCP gateway."
               exit 0
