@@ -16,8 +16,86 @@ A Model Context Protocol (MCP) server for [Immich](https://immich.app/) - the se
 ## Requirements
 
 - .NET 10.0 SDK
-- Immich server instance
+- Immich v3.0 or newer server instance
 - Immich API key
+
+## Compatibility
+
+ImmichMCP 3.x targets Immich v3 APIs. Use an older ImmichMCP release for Immich v2 servers.
+
+## Integration Tests
+
+Read-only integration tests can run against an existing Immich server without deploying ImmichMCP:
+
+```bash
+export IMMICH_BASE_URL="http://127.0.0.1:2283"
+export IMMICH_API_KEY="your-api-key"
+export IMMICH_INTEGRATION_TESTS=true
+dotnet test ImmichMCP.Tests/ImmichMCP.Tests.csproj --filter "Category=Integration"
+```
+
+For a Kubernetes-hosted Immich server, use the helper script to open a temporary port-forward:
+
+```bash
+export IMMICH_API_KEY="your-api-key"
+scripts/run-immich-integration-tests.sh
+```
+
+By default the script forwards `svc/immich-server` in the `default` namespace from port `2283`.
+Override with `IMMICH_KUBE_CONTEXT`, `IMMICH_KUBE_NAMESPACE`, `IMMICH_KUBE_SERVICE`, `IMMICH_KUBE_SERVICE_PORT`, or `IMMICH_LOCAL_PORT`.
+
+Mutation coverage, including upload/delete, is disabled by default. Enable it explicitly:
+
+```bash
+export IMMICH_INTEGRATION_MUTATION_TESTS=true
+scripts/run-immich-integration-tests.sh
+```
+
+### Docker Compose MCP smoke test
+
+For local MCP server testing without deploying a new ImmichMCP image, run the server in Docker Compose with a gitignored `.env` file:
+
+```bash
+cp .env.example .env
+# edit IMMICH_API_KEY, or populate it from the existing Kubernetes secret:
+scripts/write-compose-env-from-k8s.sh
+
+scripts/run-compose-gateway-smoke.sh
+```
+
+The smoke script port-forwards `svc/immich-server` from Kubernetes, starts ImmichMCP locally in gateway mode, then verifies over MCP HTTP that the gateway exposes only bootstrap tools, enables the `health` category, and calls `immich_ping` against the real Immich server.
+
+For manual interactive testing, keep a port-forward open in one shell:
+
+```bash
+kubectl -n default port-forward svc/immich-server 2283:2283
+```
+
+Then run Compose in another:
+
+```bash
+docker compose --env-file .env up --build
+```
+
+## Deployment
+
+Woodpecker builds, tests, packages, and publishes container images on pushes to `main`.
+Deployment is GitOps-managed: the release pipeline updates `barryw/infrastructure` at `kubernetes-default/immich/resources.yaml`, and ArgoCD reconciles the `immich` application from that repository. The pipeline does not mutate Kubernetes directly.
+
+The GitOps update sets the ImmichMCP image tag and ensures the Argo-managed deployment has `IMMICH_TOOL_MODE=gateway`. After pushing the infrastructure commit, Woodpecker waits for Argo to reconcile by running the MCP gateway integration test against `http://immich-mcp.default.svc.cluster.local:5000/mcp`.
+
+Required Woodpecker secrets:
+
+| Secret | Purpose |
+|--------|---------|
+| `github_username` | GHCR username |
+| `github_token` | GHCR token plus GitHub write access to `barryw/ImmichMCP` and `barryw/infrastructure` |
+
+Optional Woodpecker secret:
+
+| Secret | Purpose |
+|--------|---------|
+| `immich_api_key` | Runs read-only integration tests against `http://immich-server.default.svc.cluster.local:2283` before image publish/deploy |
 
 ## Installation
 
@@ -58,6 +136,7 @@ docker run -e IMMICH_BASE_URL="https://photos.example.com" \
 | `DOWNLOAD_MODE` | No | `url` | `url` returns URLs, `base64` returns encoded content |
 | `MAX_PAGE_SIZE` | No | `100` | Maximum items per page |
 | `MCP_PORT` | No | `5000` | HTTP server port |
+| `IMMICH_TOOL_MODE` | No | `static` | `static` exposes all tools; `gateway` exposes `immich_tools_list` and `immich_tools_enable` first |
 
 ## Claude Desktop Configuration
 

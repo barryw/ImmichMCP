@@ -17,9 +17,19 @@ public class ImmichClientAssetTests
             TestFixtures.CreateAsset(id: "asset-1", originalFileName: "photo1.jpg"),
             TestFixtures.CreateAsset(id: "asset-2", originalFileName: "photo2.jpg")
         };
+        var searchResult = new
+        {
+            assets = new
+            {
+                total = 2,
+                count = 2,
+                items = assets,
+                nextPage = (string?)null
+            }
+        };
 
-        handler.When(HttpMethod.Get, "*/assets*")
-            .Respond("application/json", TestFixtures.ToJson(assets));
+        handler.When(HttpMethod.Post, "*/search/metadata")
+            .Respond("application/json", TestFixtures.ToJson(searchResult));
 
         // Act
         var result = await client.GetAssetsAsync();
@@ -36,9 +46,19 @@ public class ImmichClientAssetTests
     {
         // Arrange
         var (client, handler) = MockHttpClientFactory.CreateMockClient();
+        var searchResult = new
+        {
+            assets = new
+            {
+                total = 0,
+                count = 0,
+                items = Array.Empty<object>(),
+                nextPage = (string?)null
+            }
+        };
 
-        handler.When(HttpMethod.Get, "*/assets*")
-            .Respond("application/json", "[]");
+        handler.When(HttpMethod.Post, "*/search/metadata")
+            .Respond("application/json", TestFixtures.ToJson(searchResult));
 
         // Act
         var result = await client.GetAssetsAsync();
@@ -46,6 +66,42 @@ public class ImmichClientAssetTests
         // Assert
         result.Should().NotBeNull();
         result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetAssetsAsync_SendsV3MetadataSearchRequest()
+    {
+        // Arrange
+        var (client, handler) = MockHttpClientFactory.CreateMockClient();
+        var searchResult = new
+        {
+            assets = new
+            {
+                total = 0,
+                count = 0,
+                items = Array.Empty<object>(),
+                nextPage = (string?)null
+            }
+        };
+
+        string? capturedRequestBody = null;
+        handler.When(HttpMethod.Post, "*/search/metadata")
+            .With(req =>
+            {
+                capturedRequestBody = req.Content!.ReadAsStringAsync().Result;
+                return true;
+            })
+            .Respond("application/json", TestFixtures.ToJson(searchResult));
+
+        // Act
+        await client.GetAssetsAsync(size: 10, isArchived: true);
+
+        // Assert
+        capturedRequestBody.Should().NotBeNull();
+        capturedRequestBody.Should().Contain("\"size\":10");
+        capturedRequestBody.Should().Contain("\"visibility\":\"archive\"");
+        capturedRequestBody.Should().Contain("\"withExif\":true");
+        capturedRequestBody.Should().NotContain("\"isArchived\"");
     }
 
     [Fact]

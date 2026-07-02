@@ -19,15 +19,6 @@ public record MetadataSearchRequest
     [JsonPropertyName("isFavorite")]
     public bool? IsFavorite { get; init; }
 
-    [JsonPropertyName("isArchived")]
-    public bool? IsArchived { get; init; }
-
-    [JsonPropertyName("isTrashed")]
-    public bool? IsTrashed { get; init; }
-
-    [JsonPropertyName("isVisible")]
-    public bool? IsVisible { get; init; }
-
     [JsonPropertyName("isMotion")]
     public bool? IsMotion { get; init; }
 
@@ -88,12 +79,6 @@ public record MetadataSearchRequest
     [JsonPropertyName("originalPath")]
     public string? OriginalPath { get; init; }
 
-    [JsonPropertyName("deviceAssetId")]
-    public string? DeviceAssetId { get; init; }
-
-    [JsonPropertyName("deviceId")]
-    public string? DeviceId { get; init; }
-
     [JsonPropertyName("libraryId")]
     public string? LibraryId { get; init; }
 
@@ -108,6 +93,12 @@ public record MetadataSearchRequest
 
     [JsonPropertyName("ocr")]
     public string? Ocr { get; init; }
+
+    [JsonPropertyName("visibility")]
+    public string? Visibility { get; init; }
+
+    [JsonPropertyName("withDeleted")]
+    public bool? WithDeleted { get; init; }
 }
 
 /// <summary>
@@ -129,15 +120,6 @@ public record SmartSearchRequest
 
     [JsonPropertyName("isFavorite")]
     public bool? IsFavorite { get; init; }
-
-    [JsonPropertyName("isArchived")]
-    public bool? IsArchived { get; init; }
-
-    [JsonPropertyName("isTrashed")]
-    public bool? IsTrashed { get; init; }
-
-    [JsonPropertyName("isVisible")]
-    public bool? IsVisible { get; init; }
 
     [JsonPropertyName("city")]
     public string? City { get; init; }
@@ -162,6 +144,12 @@ public record SmartSearchRequest
 
     [JsonPropertyName("personIds")]
     public string[]? PersonIds { get; init; }
+
+    [JsonPropertyName("visibility")]
+    public string? Visibility { get; init; }
+
+    [JsonPropertyName("withDeleted")]
+    public bool? WithDeleted { get; init; }
 }
 
 /// <summary>

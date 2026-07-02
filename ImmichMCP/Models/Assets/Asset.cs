@@ -10,14 +10,8 @@ public record Asset
     [JsonPropertyName("id")]
     public string Id { get; init; } = string.Empty;
 
-    [JsonPropertyName("deviceAssetId")]
-    public string DeviceAssetId { get; init; } = string.Empty;
-
     [JsonPropertyName("ownerId")]
     public string OwnerId { get; init; } = string.Empty;
-
-    [JsonPropertyName("deviceId")]
-    public string DeviceId { get; init; } = string.Empty;
 
     [JsonPropertyName("libraryId")]
     public string? LibraryId { get; init; }
@@ -49,6 +43,9 @@ public record Asset
     [JsonPropertyName("updatedAt")]
     public DateTime UpdatedAt { get; init; }
 
+    [JsonPropertyName("createdAt")]
+    public DateTime CreatedAt { get; init; }
+
     [JsonPropertyName("isFavorite")]
     public bool IsFavorite { get; init; }
 
@@ -65,7 +62,19 @@ public record Asset
     public bool HasMetadata { get; init; }
 
     [JsonPropertyName("duration")]
-    public string Duration { get; init; } = "0:00:00.00000";
+    public int? Duration { get; init; }
+
+    [JsonPropertyName("visibility")]
+    public string Visibility { get; init; } = "timeline";
+
+    [JsonPropertyName("width")]
+    public int? Width { get; init; }
+
+    [JsonPropertyName("height")]
+    public int? Height { get; init; }
+
+    [JsonPropertyName("isEdited")]
+    public bool IsEdited { get; init; }
 
     [JsonPropertyName("exifInfo")]
     public ExifInfo? ExifInfo { get; init; }
@@ -90,9 +99,6 @@ public record Asset
 
     [JsonPropertyName("resized")]
     public bool Resized { get; init; }
-
-    [JsonPropertyName("unassignedFaces")]
-    public List<UnassignedFace>? UnassignedFaces { get; init; }
 }
 
 /// <summary>
@@ -189,15 +195,6 @@ public record PersonFace
 }
 
 /// <summary>
-/// Unassigned face.
-/// </summary>
-public record UnassignedFace
-{
-    [JsonPropertyName("id")]
-    public string Id { get; init; } = string.Empty;
-}
-
-/// <summary>
 /// Asset stack information.
 /// </summary>
 public record AssetStack
@@ -235,8 +232,8 @@ public record AssetUpdateRequest
     [JsonPropertyName("isFavorite")]
     public bool? IsFavorite { get; init; }
 
-    [JsonPropertyName("isArchived")]
-    public bool? IsArchived { get; init; }
+    [JsonPropertyName("visibility")]
+    public string? Visibility { get; init; }
 
     [JsonPropertyName("description")]
     public string? Description { get; init; }
@@ -265,8 +262,8 @@ public record AssetBulkUpdateRequest
     [JsonPropertyName("isFavorite")]
     public bool? IsFavorite { get; init; }
 
-    [JsonPropertyName("isArchived")]
-    public bool? IsArchived { get; init; }
+    [JsonPropertyName("visibility")]
+    public string? Visibility { get; init; }
 
     [JsonPropertyName("dateTimeOriginal")]
     public DateTime? DateTimeOriginal { get; init; }
@@ -332,7 +329,10 @@ public record AssetSummary
     public bool IsArchived { get; init; }
 
     [JsonPropertyName("duration")]
-    public string Duration { get; init; } = "0:00:00.00000";
+    public int? Duration { get; init; }
+
+    [JsonPropertyName("visibility")]
+    public string Visibility { get; init; } = "timeline";
 
     [JsonPropertyName("city")]
     public string? City { get; init; }
@@ -361,6 +361,7 @@ public record AssetSummary
             IsFavorite = asset.IsFavorite,
             IsArchived = asset.IsArchived,
             Duration = asset.Duration,
+            Visibility = asset.Visibility,
             City = asset.ExifInfo?.City,
             Country = asset.ExifInfo?.Country,
             Make = asset.ExifInfo?.Make,

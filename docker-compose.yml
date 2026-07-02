@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   immichmcp:
     build:
@@ -8,13 +6,17 @@ services:
     container_name: immichmcp
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "${MCP_PORT:-5050}:5000"
     environment:
-      - IMMICH_BASE_URL=${IMMICH_BASE_URL:-http://immich-server:2283}
-      - IMMICH_API_KEY=${IMMICH_API_KEY}
-      - MCP_LOG_LEVEL=${MCP_LOG_LEVEL:-Information}
-      - DOWNLOAD_MODE=${DOWNLOAD_MODE:-url}
-      - MAX_PAGE_SIZE=${MAX_PAGE_SIZE:-100}
+      IMMICH_BASE_URL: ${IMMICH_BASE_URL:-http://host.docker.internal:2283}
+      IMMICH_API_KEY: ${IMMICH_API_KEY:?Set IMMICH_API_KEY in .env}
+      IMMICH_TOOL_MODE: ${IMMICH_TOOL_MODE:-gateway}
+      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-http://localhost:${MCP_PORT:-5050}}
+      MCP_LOG_LEVEL: ${MCP_LOG_LEVEL:-Information}
+      DOWNLOAD_MODE: ${DOWNLOAD_MODE:-url}
+      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE:-100}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -22,8 +24,14 @@ services:
       retries: 3
       start_period: 10s
 
-# Example with Immich network integration
-# Uncomment if running alongside Immich
+# For a Kubernetes-hosted Immich server, run:
+#   kubectl -n default port-forward svc/immich-server 2283:2283
+#
+# Then use the default IMMICH_BASE_URL in .env.example:
+#   http://host.docker.internal:2283
+#
+# If running alongside Immich in another compose network, set IMMICH_BASE_URL
+# to that service URL and uncomment the external network below.
 #    networks:
 #      - immich
 #

@@ -1,6 +1,8 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ImmichMCP.Configuration;
@@ -12,6 +14,7 @@ using ImmichMCP.Models.Tags;
 using ImmichMCP.Models.SharedLinks;
 using ImmichMCP.Models.Activities;
 using ImmichMCP.Models.Search;
+using static ImmichMCP.Utils.ParsingHelpers;
 
 namespace ImmichMCP.Client;
 
@@ -101,27 +104,25 @@ public class ImmichClient
         int? size = null,
         DateTime? updatedAfter = null,
         DateTime? updatedBefore = null,
-        string? userId = null,
         bool? isFavorite = null,
         bool? isArchived = null,
         bool? isTrashed = null,
         CancellationToken cancellationToken = default)
     {
-        var queryParams = new List<string>();
+        var request = new MetadataSearchRequest
+        {
+            Size = size,
+            UpdatedAfter = updatedAfter,
+            UpdatedBefore = updatedBefore,
+            IsFavorite = isFavorite,
+            Visibility = VisibilityFromArchived(isArchived),
+            WithDeleted = isTrashed == true ? true : null,
+            TrashedAfter = isTrashed == true ? DateTime.UnixEpoch : null,
+            WithExif = true
+        };
 
-        if (size.HasValue) queryParams.Add($"size={size.Value}");
-        if (updatedAfter.HasValue) queryParams.Add($"updatedAfter={updatedAfter.Value:O}");
-        if (updatedBefore.HasValue) queryParams.Add($"updatedBefore={updatedBefore.Value:O}");
-        if (!string.IsNullOrEmpty(userId)) queryParams.Add($"userId={userId}");
-        if (isFavorite.HasValue) queryParams.Add($"isFavorite={isFavorite.Value.ToString().ToLower()}");
-        if (isArchived.HasValue) queryParams.Add($"isArchived={isArchived.Value.ToString().ToLower()}");
-        if (isTrashed.HasValue) queryParams.Add($"isTrashed={isTrashed.Value.ToString().ToLower()}");
-
-        var url = queryParams.Count > 0
-            ? $"api/assets?{string.Join("&", queryParams)}"
-            : "api/assets";
-
-        return await GetAsync<List<Asset>>(url, cancellationToken).ConfigureAwait(false) ?? [];
+        var result = await SearchMetadataAsync(request, cancellationToken).ConfigureAwait(false);
+        return result.Items;
     }
 
     /// <summary>
@@ -192,31 +193,30 @@ public class ImmichClient
     public async Task<Asset?> UploadAssetAsync(
         byte[] fileContent,
         string fileName,
-        string deviceAssetId,
         DateTime deviceModifiedAt,
         bool? isFavorite = null,
         bool? isArchived = null,
         bool? isVisible = null,
-        string? duration = null,
+        int? duration = null,
         CancellationToken cancellationToken = default)
     {
         using var formContent = new MultipartFormDataContent();
         var fileStreamContent = new ByteArrayContent(fileContent);
+        fileStreamContent.Headers.ContentType = new MediaTypeHeaderValue(GetContentType(fileName));
         formContent.Add(fileStreamContent, "assetData", fileName);
-        formContent.Add(new StringContent(deviceAssetId), "deviceAssetId");
-        formContent.Add(new StringContent("mcp-server"), "deviceId");
-        formContent.Add(new StringContent(deviceModifiedAt.ToString("O")), "deviceModifiedAt");
-        formContent.Add(new StringContent(DateTime.UtcNow.ToString("O")), "fileCreatedAt");
-        formContent.Add(new StringContent(DateTime.UtcNow.ToString("O")), "fileModifiedAt");
+        formContent.Add(new StringContent(fileName), "filename");
+        formContent.Add(new StringContent(deviceModifiedAt.ToString("O")), "fileCreatedAt");
+        formContent.Add(new StringContent(deviceModifiedAt.ToString("O")), "fileModifiedAt");
 
         if (isFavorite.HasValue)
             formContent.Add(new StringContent(isFavorite.Value.ToString().ToLower()), "isFavorite");
-        if (isArchived.HasValue)
-            formContent.Add(new StringContent(isArchived.Value.ToString().ToLower()), "isArchived");
-        if (isVisible.HasValue)
-            formContent.Add(new StringContent(isVisible.Value.ToString().ToLower()), "isVisible");
-        if (!string.IsNullOrEmpty(duration))
-            formContent.Add(new StringContent(duration), "duration");
+
+        var visibility = VisibilityFromUploadFlags(isArchived, isVisible);
+        if (!string.IsNullOrEmpty(visibility))
+            formContent.Add(new StringContent(visibility), "visibility");
+
+        if (duration.HasValue)
+            formContent.Add(new StringContent(duration.Value.ToString()), "duration");
 
         try
         {
@@ -255,7 +255,6 @@ public class ImmichClient
 
         var fileName = Path.GetFileName(filePath);
         var fileInfo = new FileInfo(filePath);
-        var deviceAssetId = $"{fileName}-{fileInfo.Length}";
 
         _logger.LogInformation("Starting upload of {FileName} ({Size:N0} bytes)", fileName, fileInfo.Length);
 
@@ -267,7 +266,6 @@ public class ImmichClient
                 var asset = await UploadAssetAsync(
                     fileBytes,
                     fileName,
-                    deviceAssetId,
                     fileInfo.LastWriteTimeUtc,
                     isFavorite,
                     isArchived,
@@ -395,12 +393,14 @@ public class ImmichClient
     /// </summary>
     public async Task<List<Album>> GetAlbumsAsync(
         bool? shared = null,
+        bool? isOwned = null,
         string? assetId = null,
         CancellationToken cancellationToken = default)
     {
         var queryParams = new List<string>();
 
-        if (shared.HasValue) queryParams.Add($"shared={shared.Value.ToString().ToLower()}");
+        if (shared.HasValue) queryParams.Add($"isShared={shared.Value.ToString().ToLower()}");
+        if (isOwned.HasValue) queryParams.Add($"isOwned={isOwned.Value.ToString().ToLower()}");
         if (!string.IsNullOrEmpty(assetId)) queryParams.Add($"assetId={assetId}");
 
         var url = queryParams.Count > 0
@@ -413,13 +413,9 @@ public class ImmichClient
     /// <summary>
     /// Gets an album by ID.
     /// </summary>
-    public async Task<Album?> GetAlbumAsync(string id, bool? withoutAssets = null, CancellationToken cancellationToken = default)
+    public async Task<Album?> GetAlbumAsync(string id, CancellationToken cancellationToken = default)
     {
-        var url = withoutAssets.HasValue
-            ? $"api/albums/{id}?withoutAssets={withoutAssets.Value.ToString().ToLower()}"
-            : $"api/albums/{id}";
-
-        return await GetAsync<Album>(url, cancellationToken).ConfigureAwait(false);
+        return await GetAsync<Album>($"api/albums/{id}", cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -871,6 +867,20 @@ public class ImmichClient
             method, url, (int)response.StatusCode, body);
     }
 
+    private static string GetContentType(string fileName) => Path.GetExtension(fileName).ToLowerInvariant() switch
+    {
+        ".jpg" or ".jpeg" => "image/jpeg",
+        ".png" => "image/png",
+        ".gif" => "image/gif",
+        ".webp" => "image/webp",
+        ".heic" => "image/heic",
+        ".heif" => "image/heif",
+        ".mp4" => "video/mp4",
+        ".mov" => "video/quicktime",
+        ".m4v" => "video/x-m4v",
+        _ => "application/octet-stream"
+    };
+
     #endregion
 }
 
@@ -879,8 +889,13 @@ public class ImmichClient
 /// </summary>
 public record BulkIdResponse
 {
+    [JsonPropertyName("id")]
     public string Id { get; init; } = string.Empty;
+
+    [JsonPropertyName("success")]
     public bool Success { get; init; }
+
+    [JsonPropertyName("errorMessage")]
     public string? Error { get; init; }
 }
 

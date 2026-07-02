@@ -19,9 +19,10 @@ public static class AlbumTools
     public static async Task<string> List(
         ImmichClient client,
         [Description("Filter to shared albums only")] bool? shared = null,
+        [Description("Filter by ownership: true for owned albums, false for albums shared with you")] bool? isOwned = null,
         [Description("Filter to albums containing this asset ID")] string? assetId = null)
     {
-        var albums = await client.GetAlbumsAsync(shared, assetId).ConfigureAwait(false);
+        var albums = await client.GetAlbumsAsync(shared, isOwned, assetId).ConfigureAwait(false);
 
         var summaries = albums.Select(AlbumSummary.FromAlbum).ToList();
 
@@ -40,10 +41,9 @@ public static class AlbumTools
     [Description("Get album details by ID.")]
     public static async Task<string> Get(
         ImmichClient client,
-        [Description("Album ID (UUID)")] string id,
-        [Description("Exclude assets from response (for faster loading)")] bool withoutAssets = false)
+        [Description("Album ID (UUID)")] string id)
     {
-        var album = await client.GetAlbumAsync(id, withoutAssets).ConfigureAwait(false);
+        var album = await client.GetAlbumAsync(id).ConfigureAwait(false);
 
         if (album == null)
         {
@@ -86,7 +86,9 @@ public static class AlbumTools
             AlbumName = albumName,
             Description = description,
             AssetIds = ParseStringArray(assetIds),
-            SharedWithUserIds = ParseStringArray(sharedWithUserIds)
+            AlbumUsers = ParseStringArray(sharedWithUserIds)?
+                .Select(userId => new AlbumUserCreateRequest { UserId = userId, Role = "viewer" })
+                .ToArray()
         };
 
         var album = await client.CreateAlbumAsync(request).ConfigureAwait(false);
@@ -248,7 +250,7 @@ public static class AlbumTools
     {
         if (!confirm)
         {
-            var album = await client.GetAlbumAsync(id, withoutAssets: true).ConfigureAwait(false);
+            var album = await client.GetAlbumAsync(id).ConfigureAwait(false);
 
             if (album == null)
             {

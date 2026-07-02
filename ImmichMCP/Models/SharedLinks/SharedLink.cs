@@ -15,6 +15,9 @@ public record SharedLink
     [JsonPropertyName("key")]
     public string Key { get; init; } = string.Empty;
 
+    [JsonPropertyName("slug")]
+    public string? Slug { get; init; }
+
     [JsonPropertyName("type")]
     public string Type { get; init; } = string.Empty;
 
@@ -105,8 +108,8 @@ public record SharedLinkUpdateRequest
     [JsonPropertyName("description")]
     public string? Description { get; init; }
 
-    [JsonPropertyName("changeExpiryTime")]
-    public bool? ChangeExpiryTime { get; init; }
+    [JsonPropertyName("slug")]
+    public string? Slug { get; init; }
 }
 
 /// <summary>

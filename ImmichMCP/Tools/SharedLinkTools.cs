@@ -168,7 +168,7 @@ public static class SharedLinkTools
         [Description("Show metadata")] bool? showMetadata = null,
         [Description("Password (set empty string to remove)")] string? password = null,
         [Description("Description")] string? description = null,
-        [Description("Set to true to update expiry time")] bool? changeExpiryTime = null)
+        [Description("Custom share slug")] string? slug = null)
     {
         var request = new SharedLinkUpdateRequest
         {
@@ -178,7 +178,7 @@ public static class SharedLinkTools
             ShowMetadata = showMetadata,
             Password = password,
             Description = description,
-            ChangeExpiryTime = changeExpiryTime
+            Slug = slug
         };
 
         var link = await client.UpdateSharedLinkAsync(id, request).ConfigureAwait(false);

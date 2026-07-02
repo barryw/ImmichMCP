@@ -199,12 +199,9 @@ public static class AssetTools
             return JsonSerializer.Serialize(errorResponse);
         }
 
-        var deviceAssetId = $"{fileName}-{fileBytes.Length}-{DateTime.UtcNow.Ticks}";
-
         var asset = await client.UploadAssetAsync(
             fileBytes,
             fileName,
-            deviceAssetId,
             DateTime.UtcNow,
             isFavorite,
             isArchived
@@ -318,7 +315,7 @@ public static class AssetTools
         var request = new AssetUpdateRequest
         {
             IsFavorite = isFavorite,
-            IsArchived = isArchived,
+            Visibility = VisibilityFromArchived(isArchived),
             Description = description,
             DateTimeOriginal = ParseDate(dateTimeOriginal),
             Latitude = latitude,
@@ -391,7 +388,7 @@ public static class AssetTools
         {
             Ids = ids,
             IsFavorite = isFavorite,
-            IsArchived = isArchived,
+            Visibility = VisibilityFromArchived(isArchived),
             Rating = rating
         };
 

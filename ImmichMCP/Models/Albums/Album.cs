@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using ImmichMCP.Models.Assets;
 
 namespace ImmichMCP.Models.Albums;
 
@@ -10,9 +9,6 @@ public record Album
 {
     [JsonPropertyName("id")]
     public string Id { get; init; } = string.Empty;
-
-    [JsonPropertyName("ownerId")]
-    public string OwnerId { get; init; } = string.Empty;
 
     [JsonPropertyName("albumName")]
     public string AlbumName { get; init; } = string.Empty;
@@ -41,17 +37,14 @@ public record Album
     [JsonPropertyName("endDate")]
     public DateTime? EndDate { get; init; }
 
-    [JsonPropertyName("assets")]
-    public List<Asset>? Assets { get; init; }
-
     [JsonPropertyName("assetCount")]
     public int AssetCount { get; init; }
 
-    [JsonPropertyName("owner")]
-    public AlbumOwner? Owner { get; init; }
+    [JsonPropertyName("albumUsers")]
+    public List<AlbumUser>? AlbumUsers { get; init; }
 
-    [JsonPropertyName("sharedUsers")]
-    public List<AlbumUser>? SharedUsers { get; init; }
+    [JsonPropertyName("contributorCounts")]
+    public List<AlbumContributorCount>? ContributorCounts { get; init; }
 
     [JsonPropertyName("isActivityEnabled")]
     public bool IsActivityEnabled { get; init; }
@@ -107,8 +100,20 @@ public record AlbumCreateRequest
     [JsonPropertyName("assetIds")]
     public string[]? AssetIds { get; init; }
 
-    [JsonPropertyName("sharedWithUserIds")]
-    public string[]? SharedWithUserIds { get; init; }
+    [JsonPropertyName("albumUsers")]
+    public AlbumUserCreateRequest[]? AlbumUsers { get; init; }
+}
+
+/// <summary>
+/// User to share an album with when creating an album.
+/// </summary>
+public record AlbumUserCreateRequest
+{
+    [JsonPropertyName("userId")]
+    public string UserId { get; init; } = string.Empty;
+
+    [JsonPropertyName("role")]
+    public string Role { get; init; } = "viewer";
 }
 
 /// <summary>
@@ -145,6 +150,18 @@ public record AlbumStatistics
 
     [JsonPropertyName("notShared")]
     public int NotShared { get; init; }
+}
+
+/// <summary>
+/// Per-user contribution count in an album.
+/// </summary>
+public record AlbumContributorCount
+{
+    [JsonPropertyName("userId")]
+    public string UserId { get; init; } = string.Empty;
+
+    [JsonPropertyName("count")]
+    public int Count { get; init; }
 }
 
 /// <summary>

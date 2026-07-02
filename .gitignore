@@ -40,6 +40,7 @@ TestResults/
 # Environment files (may contain secrets)
 .env
 .env.*
+!.env.example
 *.local
 
 # Claude Code local settings

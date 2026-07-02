@@ -1,4 +1,11 @@
-# Release Pipeline - Build, test, version, package, release
+# Release Pipeline - Build, test, version, package, release, GitOps deploy
+#
+# Required Woodpecker secrets:
+#   github_username -> GHCR username
+#   github_token    -> GHCR token and GitHub token with write access to barryw/ImmichMCP
+#                    and barryw/infrastructure
+# Optional Woodpecker secrets:
+#   immich_api_key  -> runs read-only integration tests against in-cluster Immich before deploy
 when:
   - event: push
     branch: main
@@ -97,6 +104,20 @@ steps:
         esac
 
         NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+        PROJECT_VERSION=$(sed -n 's#.*<Version>\([^<]*\)</Version>.*#\1#p' ImmichMCP/ImmichMCP.csproj | head -1)
+        if [ -n "$PROJECT_VERSION" ]; then
+          PROJECT_MAJOR=$(echo "$PROJECT_VERSION" | cut -d. -f1)
+          PROJECT_MINOR=$(echo "$PROJECT_VERSION" | cut -d. -f2)
+          PROJECT_PATCH=$(echo "$PROJECT_VERSION" | cut -d. -f3)
+
+          if [ "$PROJECT_MAJOR" -gt "$MAJOR" ] ||
+             { [ "$PROJECT_MAJOR" -eq "$MAJOR" ] && [ "$PROJECT_MINOR" -gt "$MINOR" ]; } ||
+             { [ "$PROJECT_MAJOR" -eq "$MAJOR" ] && [ "$PROJECT_MINOR" -eq "$MINOR" ] && [ "$PROJECT_PATCH" -gt "$PATCH" ]; }; then
+            echo "Project version floor $PROJECT_VERSION is newer than calculated $NEW_VERSION; using $PROJECT_VERSION"
+            NEW_VERSION="$PROJECT_VERSION"
+          fi
+        fi
+
         echo "New version: $NEW_VERSION"
 
         # Write version files for subsequent steps
@@ -147,6 +168,35 @@ steps:
         ls -la ./artifacts/
     depends_on: [build-and-test]
 
+  # Optional read-only integration tests against the existing in-cluster Immich server.
+  - name: integration-test
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    environment:
+      IMMICH_API_KEY:
+        from_secret: immich_api_key
+      IMMICH_BASE_URL: http://immich-server.default.svc.cluster.local:2283
+      IMMICH_INTEGRATION_EXPECTED_MAJOR: "3"
+    commands:
+      - |
+        BUMP_TYPE=$(cat .bump-type)
+        if [ "$BUMP_TYPE" = "none" ]; then
+          echo "No version bump, skipping integration tests"
+          exit 0
+        fi
+
+        if [ -z "${IMMICH_API_KEY:-}" ]; then
+          echo "Woodpecker secret immich_api_key is not configured; skipping integration tests"
+          exit 0
+        fi
+
+        export IMMICH_INTEGRATION_TESTS=true
+        dotnet test ImmichMCP.Tests/ImmichMCP.Tests.csproj \
+          -c Release \
+          --no-restore \
+          --filter "Category=Integration" \
+          --logger "console;verbosity=detailed"
+    depends_on: [build-and-test]
+
   # Build and push Docker with Kaniko
   - name: docker
     image: gcr.io/kaniko-project/executor:debug
@@ -173,7 +223,7 @@ steps:
           --destination="ghcr.io/barryw/immichmcp:v$VERSION" \
           --destination="ghcr.io/barryw/immichmcp:latest" \
           --build-arg="VERSION=$VERSION"
-    depends_on: [build-and-test]
+    depends_on: [integration-test]
 
   # Commit version.json, create git tag and push
   - name: git-tag
@@ -248,27 +298,108 @@ steps:
           -d "{\"tag_name\":\"$TAG\",\"name\":\"Release $VERSION\",\"body\":\"$BODY\",\"draft\":false,\"prerelease\":false}"
     depends_on: [git-tag]
 
-  # Deploy to Kubernetes
-  - name: deploy
-    image: bitnami/kubectl:latest
+  # Deploy by updating the Argo-managed infrastructure repo.
+  - name: update-gitops
+    image: alpine/git
+    environment:
+      GITHUB_TOKEN:
+        from_secret: github_token
+      INFRA_REPO: barryw/infrastructure
+      INFRA_BRANCH: main
+      INFRA_MANIFEST: kubernetes-default/immich/resources.yaml
     commands:
       - |
+        set -eu
+
         BUMP_TYPE=$(cat .bump-type)
         if [ "$BUMP_TYPE" = "none" ]; then
-          echo "No version bump, skipping deploy"
+          echo "No version bump, skipping GitOps update"
           exit 0
         fi
 
         VERSION=$(cat .version)
-        echo "Deploying version $VERSION to Kubernetes"
+        IMAGE="ghcr.io/barryw/immichmcp:v$VERSION"
+        echo "Publishing GitOps deploy for $IMAGE"
 
-        # Update deployment image to specific version tag
-        kubectl set image deployment/immich-mcp \
-          immich-mcp=ghcr.io/barryw/immichmcp:v$VERSION \
-          -n default
+        git clone "https://x-access-token:$GITHUB_TOKEN@github.com/$INFRA_REPO.git" infrastructure
+        cd infrastructure
 
-        # Wait for rollout to complete
-        kubectl rollout status deployment/immich-mcp -n default --timeout=120s
+        git config user.email "ci@woodpecker.local"
+        git config user.name "Woodpecker CI"
 
-        echo "Deployment complete!"
-    depends_on: [docker, release]
+        sed -i "s#image: ghcr.io/barryw/immichmcp:.*#image: $IMAGE#" "$INFRA_MANIFEST"
+
+        if grep -q 'name: IMMICH_TOOL_MODE' "$INFRA_MANIFEST"; then
+          sed -i '/name: IMMICH_TOOL_MODE/{n;s#value: .*#value: gateway#;}' "$INFRA_MANIFEST"
+        else
+          awk '
+            BEGIN { in_immich_mcp = 0; inserted = 0 }
+            /^---$/ { in_immich_mcp = 0 }
+            /^  name: immich-mcp$/ { in_immich_mcp = 1 }
+            {
+              print
+              if (in_immich_mcp && !inserted && $0 ~ /^[[:space:]]+- name: MCP_PUBLIC_URL$/) {
+                if ((getline next_line) > 0) {
+                  print next_line
+                  print "        - name: IMMICH_TOOL_MODE"
+                  print "          value: gateway"
+                  inserted = 1
+                  next
+                }
+              }
+            }
+            END { if (!inserted) exit 2 }
+          ' "$INFRA_MANIFEST" > "$INFRA_MANIFEST.tmp"
+          mv "$INFRA_MANIFEST.tmp" "$INFRA_MANIFEST"
+        fi
+
+        grep -q "image: $IMAGE" "$INFRA_MANIFEST"
+        grep -A1 'name: IMMICH_TOOL_MODE' "$INFRA_MANIFEST" | grep -q 'value: gateway'
+
+        if git diff --quiet -- "$INFRA_MANIFEST"; then
+          echo "Infrastructure manifest already points at $IMAGE"
+          exit 0
+        fi
+
+        git diff -- "$INFRA_MANIFEST"
+        git add "$INFRA_MANIFEST"
+        git commit -m "chore(immich): deploy immichmcp v$VERSION"
+        git push origin "HEAD:$INFRA_BRANCH"
+
+        echo "GitOps deploy commit pushed. ArgoCD will reconcile the immich app from $INFRA_REPO@$INFRA_BRANCH."
+    depends_on: [release]
+
+  # Verify Argo reconciled the GitOps commit by testing the in-cluster MCP service.
+  - name: verify-gitops-deploy
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    environment:
+      IMMICH_MCP_INTEGRATION_TESTS: "true"
+      IMMICH_MCP_BASE_URL: http://immich-mcp.default.svc.cluster.local:5000/mcp
+    commands:
+      - |
+        set -eu
+
+        BUMP_TYPE=$(cat .bump-type)
+        if [ "$BUMP_TYPE" = "none" ]; then
+          echo "No version bump, skipping GitOps deploy verification"
+          exit 0
+        fi
+
+        echo "Waiting for ArgoCD to reconcile immich-mcp through GitOps..."
+        for attempt in $(seq 1 30); do
+          if dotnet test ImmichMCP.Tests/ImmichMCP.Tests.csproj \
+            -c Release \
+            --no-restore \
+            --filter "Category=McpIntegration" \
+            --logger "console;verbosity=normal"; then
+            echo "GitOps deploy verified through MCP gateway."
+            exit 0
+          fi
+
+          echo "MCP gateway verification attempt $attempt failed; retrying in 10s"
+          sleep 10
+        done
+
+        echo "GitOps deploy verification did not pass before timeout"
+        exit 1
+    depends_on: [update-gitops]

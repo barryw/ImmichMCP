@@ -66,4 +66,33 @@ public static class ParsingHelpers
 
         return null;
     }
+
+    /// <summary>
+    /// Maps the old archived flag exposed by tools to Immich v3 asset visibility.
+    /// </summary>
+    public static string? VisibilityFromArchived(bool? isArchived) => isArchived switch
+    {
+        true => "archive",
+        false => "timeline",
+        null => null
+    };
+
+    /// <summary>
+    /// Maps upload visibility parameters to Immich v3 asset visibility.
+    /// </summary>
+    public static string? VisibilityFromUploadFlags(bool? isArchived, bool? isVisible)
+    {
+        if (isArchived == true)
+            return "archive";
+
+        if (isArchived == false)
+            return "timeline";
+
+        return isVisible switch
+        {
+            true => "timeline",
+            false => "hidden",
+            null => null
+        };
+    }
 }

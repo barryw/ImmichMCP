@@ -1,0 +1,17 @@
+**/bin/
+**/obj/
+**/out/
+artifacts/
+
+.git/
+.idea/
+.vs/
+.DS_Store
+
+.env
+.env.*
+!.env.example
+
+TestResults/
+*.trx
+*.nupkg

@@ -6,6 +6,7 @@ using ModelContextProtocol.Server;
 using ImmichMCP.Client;
 using ImmichMCP.Configuration;
 using ImmichMCP.Services;
+using ImmichMCP.Tools.Gateway;
 using Polly;
 using Polly.Extensions.Http;
 
@@ -26,7 +27,7 @@ if (useStdio)
     builder.Services
         .AddMcpServer()
         .WithStdioServerTransport()
-        .WithToolsFromAssembly();
+        .ConfigureTools(UseToolGateway(builder.Configuration));
 
     await builder.Build().RunAsync();
 }
@@ -37,17 +38,10 @@ else
 
     ConfigureServices(builder.Services, builder.Configuration);
 
-    // Register upload session service as singleton
-    builder.Services.AddSingleton<UploadSessionService>();
-
     builder.Services
         .AddMcpServer()
-        .WithHttpTransport(options =>
-        {
-            // Increase idle timeout to 24 hours to prevent session drops during long operations
-            options.IdleTimeout = TimeSpan.FromHours(24);
-        })
-        .WithToolsFromAssembly();
+        .WithHttpTransport()
+        .ConfigureTools(UseToolGateway(builder.Configuration));
 
     var app = builder.Build();
 
@@ -112,14 +106,10 @@ else
             await file.CopyToAsync(memoryStream);
             var fileBytes = memoryStream.ToArray();
 
-            // Generate device asset ID
-            var deviceAssetId = $"{fileName}-{fileBytes.Length}-{DateTime.UtcNow.Ticks}";
-
             // Upload to Immich
             var asset = await immichClient.UploadAssetAsync(
                 fileBytes,
                 fileName,
-                deviceAssetId,
                 DateTime.UtcNow,
                 session.IsFavorite,
                 session.IsArchived
@@ -217,4 +207,31 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
     .AddPolicyHandler(retryPolicy);
 
     services.AddTransient<ImmichAuthHandler>();
+    services.AddSingleton<UploadSessionService>();
+
+    if (UseToolGateway(configuration))
+    {
+        services.AddImmichToolGateway();
+    }
+}
+
+bool UseToolGateway(IConfiguration configuration)
+{
+    var mode = Environment.GetEnvironmentVariable("IMMICH_TOOL_MODE")
+               ?? Environment.GetEnvironmentVariable("MCP_TOOL_MODE")
+               ?? configuration.GetValue<string>("Mcp:ToolMode")
+               ?? "static";
+
+    return string.Equals(mode, "gateway", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(mode, "dynamic", StringComparison.OrdinalIgnoreCase);
+}
+
+static class McpServerBuilderToolModeExtensions
+{
+    public static IMcpServerBuilder ConfigureTools(this IMcpServerBuilder builder, bool useToolGateway)
+    {
+        return useToolGateway
+            ? builder.WithImmichToolGateway()
+            : builder.WithToolsFromAssembly();
+    }
 }

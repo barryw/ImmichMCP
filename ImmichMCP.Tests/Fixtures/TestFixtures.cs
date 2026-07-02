@@ -18,9 +18,7 @@ public static class TestFixtures
         return new Asset
         {
             Id = id ?? Guid.NewGuid().ToString(),
-            DeviceAssetId = "test-device-asset",
             OwnerId = Guid.NewGuid().ToString(),
-            DeviceId = "test-device",
             Type = type,
             OriginalPath = $"/uploads/{originalFileName}",
             OriginalFileName = originalFileName,
@@ -34,7 +32,8 @@ public static class TestFixtures
             IsTrashed = false,
             IsOffline = false,
             HasMetadata = true,
-            Duration = "0:00:00.00000",
+            Duration = null,
+            Visibility = isArchived ? "archive" : "timeline",
             Checksum = "abc123",
             Resized = true,
             ExifInfo = new ExifInfo
@@ -59,7 +58,6 @@ public static class TestFixtures
         return new Album
         {
             Id = id ?? Guid.NewGuid().ToString(),
-            OwnerId = Guid.NewGuid().ToString(),
             AlbumName = albumName,
             Description = "Test album description",
             CreatedAt = DateTime.UtcNow.AddDays(-7),
