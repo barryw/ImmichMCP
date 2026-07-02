@@ -80,9 +80,9 @@ docker compose --env-file .env up --build
 ## Deployment
 
 Woodpecker builds, tests, packages, and publishes container images on pushes to `main`.
-Deployment is GitOps-managed: the release pipeline updates `barryw/infrastructure` at `kubernetes-default/immich/resources.yaml`, and ArgoCD reconciles the `immich` application from that repository. The pipeline does not mutate Kubernetes directly.
+Deployment is GitOps-managed: the release pipeline updates `barryw/infrastructure` at `kubernetes-default/immich/resources.yaml` through an infrastructure pull request, and ArgoCD reconciles the `immich` application from that repository after the PR merges. The pipeline does not mutate Kubernetes directly.
 
-The GitOps update sets the ImmichMCP image tag and ensures the Argo-managed deployment has `IMMICH_TOOL_MODE=gateway`. After pushing the infrastructure commit, Woodpecker waits for Argo to reconcile by running the MCP gateway integration test against `http://immich-mcp.default.svc.cluster.local:5000/mcp`.
+The GitOps update sets the ImmichMCP image tag and ensures the Argo-managed deployment has `IMMICH_TOOL_MODE=gateway`. After merging the infrastructure PR, Woodpecker waits for Argo to reconcile by running the MCP gateway integration test against `http://immich-mcp.default.svc.cluster.local:5000/mcp`.
 
 Required Woodpecker secrets:
 

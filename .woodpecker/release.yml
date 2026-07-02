@@ -267,7 +267,7 @@ steps:
           exit 0
         fi
 
-        apk add --no-cache curl git
+        apk add --no-cache curl git jq
 
         TAG=$(cat .tag)
         VERSION=$(cat .version)
@@ -282,16 +282,18 @@ steps:
           CHANGELOG=$(git log --pretty=format:"- %s" "$LATEST_TAG..HEAD^" | head -20)
         fi
 
-        # Escape JSON special characters
-        CHANGELOG_JSON=$(echo "$CHANGELOG" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+        BODY=$(printf "## What's Changed\n\n%s\n\n**Full Changelog**: https://github.com/barryw/ImmichMCP/compare/%s...%s" "$CHANGELOG" "$LATEST_TAG" "$TAG")
+        PAYLOAD=$(jq -n \
+          --arg tag "$TAG" \
+          --arg name "Release $VERSION" \
+          --arg body "$BODY" \
+          '{tag_name:$tag,name:$name,body:$body,draft:false,prerelease:false}')
 
-        BODY="## What's Changed\n\n$CHANGELOG_JSON\n\n**Full Changelog**: https://github.com/barryw/ImmichMCP/compare/$LATEST_TAG...$TAG"
-
-        curl -X POST \
+        curl -fsS -X POST \
           -H "Authorization: token $GITHUB_TOKEN" \
           -H "Accept: application/vnd.github.v3+json" \
           https://api.github.com/repos/barryw/ImmichMCP/releases \
-          -d "{\"tag_name\":\"$TAG\",\"name\":\"Release $VERSION\",\"body\":\"$BODY\",\"draft\":false,\"prerelease\":false}"
+          -d "$PAYLOAD"
     depends_on: [git-tag]
 
   # Deploy by updating the Argo-managed infrastructure repo.
@@ -306,6 +308,7 @@ steps:
     commands:
       - |
         set -eu
+        apk add --no-cache curl jq
 
         BUMP_TYPE=$(cat .bump-type)
         if [ "$BUMP_TYPE" = "none" ]; then
@@ -315,6 +318,7 @@ steps:
 
         VERSION=$(cat .version)
         IMAGE="ghcr.io/barryw/immichmcp:v$VERSION"
+        DEPLOY_BRANCH="ci/immichmcp-v$VERSION"
         echo "Publishing GitOps deploy for $IMAGE"
 
         git clone "https://x-access-token:$GITHUB_TOKEN@github.com/$INFRA_REPO.git" infrastructure
@@ -322,6 +326,7 @@ steps:
 
         git config user.email "ci@woodpecker.local"
         git config user.name "Woodpecker CI"
+        git checkout -B "$DEPLOY_BRANCH"
 
         sed -i "s#image: ghcr.io/barryw/immichmcp:.*#image: $IMAGE#" "$INFRA_MANIFEST"
 
@@ -360,9 +365,57 @@ steps:
         git diff -- "$INFRA_MANIFEST"
         git add "$INFRA_MANIFEST"
         git commit -m "chore(immich): deploy immichmcp v$VERSION"
-        git push origin "HEAD:$INFRA_BRANCH"
+        git push --force-with-lease origin "$DEPLOY_BRANCH"
 
-        echo "GitOps deploy commit pushed. ArgoCD will reconcile the immich app from $INFRA_REPO@$INFRA_BRANCH."
+        INFRA_OWNER=$(echo "$INFRA_REPO" | cut -d/ -f1)
+        PR_TITLE="chore(immich): deploy immichmcp v$VERSION"
+        PR_BODY=$(printf "Deploys %s through the Argo-managed immich application.\n\nWoodpecker release: %s" "$IMAGE" "$VERSION")
+
+        EXISTING_PR=$(curl -fsS \
+          -H "Authorization: token $GITHUB_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/$INFRA_REPO/pulls?head=$INFRA_OWNER:$DEPLOY_BRANCH&base=$INFRA_BRANCH&state=open" \
+          | jq -r '.[0].number // empty')
+
+        if [ -n "$EXISTING_PR" ]; then
+          PR_NUMBER="$EXISTING_PR"
+          PR_URL="https://github.com/$INFRA_REPO/pull/$PR_NUMBER"
+          echo "Reusing infrastructure PR $PR_URL"
+        else
+          PR_PAYLOAD=$(jq -n \
+            --arg title "$PR_TITLE" \
+            --arg head "$DEPLOY_BRANCH" \
+            --arg base "$INFRA_BRANCH" \
+            --arg body "$PR_BODY" \
+            '{title:$title,head:$head,base:$base,body:$body}')
+
+          PR_RESPONSE=$(curl -fsS -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/$INFRA_REPO/pulls" \
+            -d "$PR_PAYLOAD")
+          PR_NUMBER=$(echo "$PR_RESPONSE" | jq -r '.number')
+          PR_URL=$(echo "$PR_RESPONSE" | jq -r '.html_url')
+          echo "Created infrastructure PR $PR_URL"
+        fi
+
+        MERGE_PAYLOAD=$(jq -n \
+          --arg title "$PR_TITLE" \
+          --arg message "Deploy $IMAGE for Immich v3 gateway support." \
+          '{commit_title:$title,commit_message:$message,merge_method:"squash"}')
+
+        if curl -fsS -X PUT \
+          -H "Authorization: token $GITHUB_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/$INFRA_REPO/pulls/$PR_NUMBER/merge" \
+          -d "$MERGE_PAYLOAD"; then
+          git push origin --delete "$DEPLOY_BRANCH" || true
+        else
+          echo "Infrastructure PR $PR_URL could not be merged automatically; Argo will reconcile after it is merged."
+          exit 1
+        fi
+
+        echo "GitOps deploy PR merged. ArgoCD will reconcile the immich app from $INFRA_REPO@$INFRA_BRANCH."
     depends_on: [release]
 
   # Verify Argo reconciled the GitOps commit by testing the in-cluster MCP service.
