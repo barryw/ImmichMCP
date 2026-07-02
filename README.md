@@ -134,6 +134,8 @@ docker run -e IMMICH_BASE_URL="https://photos.example.com" \
 | `MCP_PORT` | No | `5000` | HTTP server port |
 | `IMMICH_TOOL_MODE` | No | `static` | `static` exposes all tools; `gateway` exposes `immich_tools_list` and `immich_tools_enable` first |
 
+In `gateway` mode, `immich_tools_enable` emits the MCP `notifications/tools/list_changed` notification so clients can refresh the normal `tools/list` inventory after enabling a category or tool.
+
 ## Claude Desktop Configuration
 
 Add to your Claude Desktop config (`~/.config/claude/claude_desktop_config.json` on Linux/macOS or `%APPDATA%\Claude\claude_desktop_config.json` on Windows):

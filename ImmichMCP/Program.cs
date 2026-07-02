@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using ImmichMCP.Client;
 using ImmichMCP.Configuration;
@@ -25,7 +26,7 @@ if (useStdio)
     });
 
     builder.Services
-        .AddMcpServer()
+        .AddMcpServer(options => ConfigureMcpCapabilities(options, builder.Configuration))
         .WithStdioServerTransport()
         .ConfigureTools(UseToolGateway(builder.Configuration));
 
@@ -39,7 +40,7 @@ else
     ConfigureServices(builder.Services, builder.Configuration);
 
     builder.Services
-        .AddMcpServer()
+        .AddMcpServer(options => ConfigureMcpCapabilities(options, builder.Configuration))
         .WithHttpTransport()
         .ConfigureTools(UseToolGateway(builder.Configuration));
 
@@ -224,6 +225,18 @@ bool UseToolGateway(IConfiguration configuration)
 
     return string.Equals(mode, "gateway", StringComparison.OrdinalIgnoreCase)
            || string.Equals(mode, "dynamic", StringComparison.OrdinalIgnoreCase);
+}
+
+void ConfigureMcpCapabilities(McpServerOptions options, IConfiguration configuration)
+{
+    if (!UseToolGateway(configuration))
+    {
+        return;
+    }
+
+    options.Capabilities ??= new ServerCapabilities();
+    options.Capabilities.Tools ??= new ToolsCapability();
+    options.Capabilities.Tools.ListChanged = true;
 }
 
 static class McpServerBuilderToolModeExtensions

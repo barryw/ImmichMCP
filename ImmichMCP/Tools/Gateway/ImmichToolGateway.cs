@@ -122,7 +122,7 @@ public sealed class ImmichToolGateway
 
         if (string.Equals(toolName, EnableToolsName, StringComparison.Ordinal))
         {
-            return EnableTools(session, request.Params?.Arguments);
+            return await EnableToolsAsync(session, request, cancellationToken).ConfigureAwait(false);
         }
 
         if (!_state.IsEnabled(session, toolName))
@@ -209,8 +209,12 @@ public sealed class ImmichToolGateway
         };
     }
 
-    private CallToolResult EnableTools(object? session, IDictionary<string, JsonElement>? arguments)
+    private async ValueTask<CallToolResult> EnableToolsAsync(
+        object? session,
+        RequestContext<CallToolRequestParams> request,
+        CancellationToken cancellationToken)
     {
+        var arguments = request.Params?.Arguments;
         var requestedCategories = GetStringList(arguments, "categories");
         var requestedTools = GetStringList(arguments, "tools");
         var resolvedTools = _registry.ResolveToolNames(requestedTools, requestedCategories);
@@ -230,6 +234,8 @@ public sealed class ImmichToolGateway
         }
 
         var enabledTools = _state.Enable(session, resolvedTools);
+        await request.Server.SendNotificationAsync(NotificationMethods.ToolListChangedNotification, cancellationToken).ConfigureAwait(false);
+
         var payloadSuccess = new
         {
             enabled = true,
