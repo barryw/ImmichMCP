@@ -330,31 +330,36 @@ steps:
 
         sed -i "s#image: ghcr.io/barryw/immichmcp:.*#image: $IMAGE#" "$INFRA_MANIFEST"
 
-        if grep -q 'name: IMMICH_TOOL_MODE' "$INFRA_MANIFEST"; then
-          sed -i '/name: IMMICH_TOOL_MODE/{n;s#value: .*#value: gateway#;}' "$INFRA_MANIFEST"
-        else
-          awk '
-            BEGIN { in_immich_mcp = 0; inserted = 0 }
-            /^---$/ { in_immich_mcp = 0 }
-            /^  name: immich-mcp$/ { in_immich_mcp = 1 }
-            {
-              print
-              if (in_immich_mcp && !inserted && $0 ~ /^[[:space:]]+- name: MCP_PUBLIC_URL$/) {
-                if ((getline next_line) > 0) {
-                  print next_line
-                  print "        - name: IMMICH_TOOL_MODE"
-                  print "          value: gateway"
-                  inserted = 1
-                  next
-                }
+        awk '
+          BEGIN { in_immich_mcp = 0; inserted = 0; skip_tool_mode = 0 }
+          /^---$/ { in_immich_mcp = 0 }
+          /^  name: immich-mcp$/ { in_immich_mcp = 1 }
+          in_immich_mcp && $0 ~ /^[[:space:]]+- name: IMMICH_TOOL_MODE$/ {
+            skip_tool_mode = 1
+            next
+          }
+          skip_tool_mode && $0 ~ /^[[:space:]]+value: / {
+            skip_tool_mode = 0
+            next
+          }
+          {
+            print
+            if (in_immich_mcp && !inserted && $0 ~ /^[[:space:]]+- name: MCP_PUBLIC_URL$/) {
+              if ((getline next_line) > 0) {
+                print next_line
+                print "            - name: IMMICH_TOOL_MODE"
+                print "              value: gateway"
+                inserted = 1
+                next
               }
             }
-            END { if (!inserted) exit 2 }
-          ' "$INFRA_MANIFEST" > "$INFRA_MANIFEST.tmp"
-          mv "$INFRA_MANIFEST.tmp" "$INFRA_MANIFEST"
-        fi
+          }
+          END { if (!inserted) exit 2 }
+        ' "$INFRA_MANIFEST" > "$INFRA_MANIFEST.tmp"
+        mv "$INFRA_MANIFEST.tmp" "$INFRA_MANIFEST"
 
         grep -q "image: $IMAGE" "$INFRA_MANIFEST"
+        grep -A2 'name: MCP_PUBLIC_URL' "$INFRA_MANIFEST" | grep -q 'name: IMMICH_TOOL_MODE'
         grep -A1 'name: IMMICH_TOOL_MODE' "$INFRA_MANIFEST" | grep -q 'value: gateway'
 
         if git diff --quiet -- "$INFRA_MANIFEST"; then
@@ -436,13 +441,20 @@ steps:
 
         echo "Waiting for ArgoCD to reconcile immich-mcp through GitOps..."
         for attempt in $(seq 1 30); do
+          RESULTS_DIR="TestResults/mcp-gateway"
+          rm -rf "$RESULTS_DIR"
           if dotnet test ImmichMCP.Tests/ImmichMCP.Tests.csproj \
             -c Release \
             --no-restore \
-            --filter "Category=McpIntegration" \
-            --logger "console;verbosity=normal"; then
-            echo "GitOps deploy verified through MCP gateway."
-            exit 0
+            --logger "console;verbosity=normal" \
+            --logger "trx;LogFileName=mcp-gateway.trx" \
+            --results-directory "$RESULTS_DIR"; then
+            if grep -q 'testName="ImmichMCP.Tests.Integration.ImmichMcpGatewayIntegrationTests.GatewayModeEnablesHealthToolsAndPingsImmich"[^>]*outcome="Passed"' "$RESULTS_DIR/mcp-gateway.trx"; then
+              echo "GitOps deploy verified through MCP gateway."
+              exit 0
+            fi
+
+            echo "MCP gateway test did not report a Passed outcome"
           fi
 
           echo "MCP gateway verification attempt $attempt failed; retrying in 10s"
