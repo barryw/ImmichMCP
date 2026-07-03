@@ -13,23 +13,7 @@ public class ImmichMcpGatewayIntegrationTests
     [McpIntegrationFact]
     public async Task GatewayModeEnablesHealthToolsAndPingsImmich()
     {
-        var endpoint = Environment.GetEnvironmentVariable("IMMICH_MCP_BASE_URL") ?? "http://127.0.0.1:5000/mcp";
-        await using var client = await McpClient.CreateAsync(
-            new HttpClientTransport(
-                new HttpClientTransportOptions
-                {
-                    Endpoint = new Uri(endpoint),
-                    Name = "immichmcp-compose-smoke"
-                },
-                NullLoggerFactory.Instance),
-            new McpClientOptions
-            {
-                ClientInfo = new Implementation
-                {
-                    Name = "immichmcp-gateway-integration-tests",
-                    Version = "1.0.0"
-                }
-            });
+        await using var client = await CreateClient();
 
         var initialTools = await client.ListToolsAsync(new ListToolsRequestParams());
         initialTools.Tools.Select(tool => tool.Name).Should().BeEquivalentTo(
@@ -54,6 +38,58 @@ public class ImmichMcpGatewayIntegrationTests
         var version = pingJson.RootElement.GetProperty("result").GetProperty("version").GetString();
         version.Should().NotBeNullOrWhiteSpace();
         version!.TrimStart('v').Should().StartWith("3.");
+    }
+
+    [McpIntegrationFact]
+    public async Task GatewayModeAdvertisesAndEmitsToolListChanged()
+    {
+        var notification = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var client = await CreateClient(new McpClientHandlers
+        {
+            NotificationHandlers = new Dictionary<string, Func<JsonRpcNotification, CancellationToken, ValueTask>>
+            {
+                [NotificationMethods.ToolListChangedNotification] = (_, _) =>
+                {
+                    notification.TrySetResult();
+                    return ValueTask.CompletedTask;
+                }
+            }
+        });
+
+        client.ServerCapabilities.Tools.Should().NotBeNull();
+        client.ServerCapabilities.Tools!.ListChanged.Should().BeTrue();
+
+        var enableResult = await client.CallToolAsync(
+            ImmichToolGateway.EnableToolsName,
+            new Dictionary<string, object?> { ["categories"] = new[] { "search" } });
+
+        enableResult.IsError.Should().NotBeTrue(GetText(enableResult));
+        await notification.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var enabledTools = await client.ListToolsAsync(new ListToolsRequestParams());
+        enabledTools.Tools.Select(tool => tool.Name).Should().Contain("immich_search_metadata");
+    }
+
+    private static async Task<McpClient> CreateClient(McpClientHandlers? handlers = null)
+    {
+        var endpoint = Environment.GetEnvironmentVariable("IMMICH_MCP_BASE_URL") ?? "http://127.0.0.1:5000/mcp";
+        return await McpClient.CreateAsync(
+            new HttpClientTransport(
+                new HttpClientTransportOptions
+                {
+                    Endpoint = new Uri(endpoint),
+                    Name = "immichmcp-compose-smoke"
+                },
+                NullLoggerFactory.Instance),
+            new McpClientOptions
+            {
+                ClientInfo = new Implementation
+                {
+                    Name = "immichmcp-gateway-integration-tests",
+                    Version = "1.0.0"
+                },
+                Handlers = handlers ?? new McpClientHandlers()
+            });
     }
 
     private static string GetText(CallToolResult result)
