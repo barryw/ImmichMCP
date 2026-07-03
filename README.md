@@ -35,22 +35,16 @@ export IMMICH_INTEGRATION_TESTS=true
 dotnet test ImmichMCP.Tests/ImmichMCP.Tests.csproj --filter "Category=Integration"
 ```
 
-For a Kubernetes-hosted Immich server, use the helper script to open a temporary port-forward:
-
-```bash
-export IMMICH_API_KEY="your-api-key"
-scripts/run-immich-integration-tests.sh
-```
-
-By default the script forwards `svc/immich-server` in the `default` namespace from port `2283`.
-Override with `IMMICH_KUBE_CONTEXT`, `IMMICH_KUBE_NAMESPACE`, `IMMICH_KUBE_SERVICE`, `IMMICH_KUBE_SERVICE_PORT`, or `IMMICH_LOCAL_PORT`.
-
-Mutation coverage, including upload/delete, is disabled by default. Enable it explicitly:
+Mutation coverage (create/update/delete paths) is disabled by default. Enable it explicitly
+to also run the full 49-tool smoke:
 
 ```bash
 export IMMICH_INTEGRATION_MUTATION_TESTS=true
-scripts/run-immich-integration-tests.sh
+dotnet test ImmichMCP.Tests/ImmichMCP.Tests.csproj --filter "Category=Integration"
 ```
+
+(If your Immich runs somewhere not directly reachable, point `IMMICH_BASE_URL` at it however
+you normally reach it — e.g. a port-forward or tunnel — before running the tests.)
 
 With mutation coverage enabled, `ToolCoverageIntegrationTests` exercises **all 49 tools**
 against the live server. It is strictly non-destructive to existing data: every mutation
@@ -59,47 +53,28 @@ an activity) and teardown deletes only those; the two tools that would mutate re
 un-creatable data (`immich_people_update`, `immich_people_merge`) are exercised with bogus
 IDs only and must refuse safely.
 
-### Docker Compose MCP smoke test
-
-For local MCP server testing without deploying a new ImmichMCP image, run the server in Docker Compose with a gitignored `.env` file:
-
-```bash
-cp .env.example .env
-# edit IMMICH_API_KEY, or populate it from the existing Kubernetes secret:
-scripts/write-compose-env-from-k8s.sh
-
-scripts/run-compose-gateway-smoke.sh
-```
-
-The smoke script port-forwards `svc/immich-server` from Kubernetes, starts ImmichMCP locally in gateway mode, then verifies over MCP HTTP that the gateway exposes only bootstrap tools, enables the `health` category, and calls `immich_ping` against the real Immich server.
-
-For manual interactive testing, keep a port-forward open in one shell:
-
-```bash
-kubectl -n default port-forward svc/immich-server 2283:2283
-```
-
-Then run Compose in another:
-
-```bash
-docker compose --env-file .env up --build
-```
-
 ## Deployment
 
-Woodpecker builds, tests, packages, and publishes container images on pushes to `main`.
-Deployment is GitOps-managed: the release pipeline updates `barryw/infrastructure` at `kubernetes-default/immich/resources.yaml` through an infrastructure pull request, and ArgoCD reconciles the `immich` application from that repository after the PR merges. The pipeline does not mutate Kubernetes directly.
+ImmichMCP is published as a container image at `ghcr.io/barryw/immichmcp`. Run it wherever you
+host containers — Docker, Docker Compose, or Kubernetes.
 
-The GitOps update sets the ImmichMCP image tag and ensures the Argo-managed deployment has `IMMICH_TOOL_MODE=gateway`. After merging the infrastructure PR, Woodpecker waits for Argo to reconcile by running the MCP gateway integration test against `http://immich-mcp.default.svc.cluster.local:5000/mcp`.
+- Set `IMMICH_BASE_URL` and `IMMICH_API_KEY` (see [Environment Variables](#environment-variables)).
+- Expose the HTTP port (default `5000`). The MCP endpoint is served at `/mcp` and a health check
+  at `/health`.
+- For remote/HTTP clients, set `IMMICH_TOOL_MODE=gateway` so clients enable tool categories on
+  demand instead of loading all tools up front.
 
-Required Woodpecker secrets:
+### Docker Compose
 
-| Secret | Purpose |
-|--------|---------|
-| `github_username` | GHCR username |
-| `github_token` | GHCR token plus GitHub write access to `barryw/ImmichMCP` and `barryw/infrastructure` |
+```bash
+cp .env.example .env          # set IMMICH_BASE_URL and IMMICH_API_KEY
+docker compose up --build
+```
 
-The direct Immich API integration step runs before image publish only when `IMMICH_API_KEY` is already injected into the runner environment. The required deployment verification does not need that key; it exercises the Argo-managed MCP service after the GitOps commit reconciles.
+### Kubernetes
+
+A sample manifest is provided in [`k8s/deployment.yaml`](k8s/deployment.yaml) — set the image,
+the two environment variables, and `IMMICH_TOOL_MODE=gateway`, then apply it with `kubectl`.
 
 ## Installation
 
