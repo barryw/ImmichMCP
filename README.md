@@ -191,6 +191,7 @@ Or with Docker:
 | `immich_assets_download_thumbnail` | Get thumbnail/preview URLs |
 | `immich_assets_upload` | Upload asset (base64) |
 | `immich_assets_upload_from_path` | Upload from local file path |
+| `immich_assets_upload_authorize` | Mint a short-lived, upload-only URL so a client can upload local files **directly** to Immich (no API key exposed) |
 | `immich_assets_update` | Update asset metadata |
 | `immich_assets_bulk_update` | Bulk update multiple assets |
 | `immich_assets_delete` | Delete asset(s) |
@@ -283,6 +284,28 @@ Find photos of sunset at the beach
 
 ```
 Archive all photos from 2020 that aren't favorites
+```
+
+### Upload a local folder (no install, no exposed API key)
+
+```
+Upload ~/Photos/Iceland2026 to Immich into an album called "Iceland 2026"
+```
+
+Because the MCP server is remote and cannot read your disk, `immich_assets_upload_authorize`
+mints a short-lived, **upload-only** shared-link URL scoped to a (dynamically created) album.
+The client then uploads the files **directly to Immich** with `curl` it already has — the master
+API key never leaves the server, and no CLI/script needs to be installed. Re-running is safe and
+resumable: Immich deduplicates by content, so already-uploaded files return `duplicate`. See the
+[uploading-local-media](docs/uploading-local-media.md) doc for the exact client recipe.
+
+```jsonc
+// immich_assets_upload_authorize(album_name: "Iceland 2026", ttl_minutes: 120)
+{
+  "upload_url": "https://immich.example/api/assets?key=<token>",
+  "album_id": "…", "shared_link_id": "…", "expires_at": "2026-07-02T14:00:00.0000000Z"
+}
+// then: POST each file to upload_url (multipart: assetData, fileCreatedAt, fileModifiedAt)
 ```
 
 ## Safety Features

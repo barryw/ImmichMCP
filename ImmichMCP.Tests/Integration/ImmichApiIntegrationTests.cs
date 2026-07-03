@@ -1,5 +1,8 @@
+using System.Net.Http.Headers;
+using System.Text.Json;
 using FluentAssertions;
 using ImmichMCP.Models.Search;
+using ImmichMCP.Tools;
 
 namespace ImmichMCP.Tests.Integration;
 
@@ -50,6 +53,39 @@ public class ImmichApiIntegrationTests
         asset.Id.Should().NotBeNullOrWhiteSpace();
         asset.Type.Should().NotBeNullOrWhiteSpace();
         asset.Visibility.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [IntegrationFact]
+    public async Task MetadataSearch_WithTakenAfterFilter_ReturnsResults()
+    {
+        // Regression: Immich v3 validates datetime fields with Zod, rejecting datetimes
+        // without a timezone designator (HTTP 400), which the client swallowed into an
+        // empty result. This exercises the real takenAfter path end-to-end.
+        var settings = IntegrationTestSettings.Load();
+        var client = settings.CreateClient();
+
+        // Find the newest asset to derive a date window that is guaranteed to contain data.
+        var newest = await client.SearchMetadataAsync(new MetadataSearchRequest { Size = 1, Order = "desc" });
+        var anchor = newest.Items.FirstOrDefault();
+        if (anchor == null)
+        {
+            return; // empty library — nothing to assert
+        }
+
+        // A window starting just before the newest asset must return at least that asset.
+        var withinWindow = await client.SearchMetadataAsync(new MetadataSearchRequest
+        {
+            TakenAfter = anchor.FileCreatedAt.AddDays(-1),
+            Order = "desc"
+        });
+        withinWindow.Items.Should().NotBeEmpty("takenAfter must be accepted by Immich v3, not rejected into an empty result");
+
+        // A window far in the future must return nothing — proving the filter is applied, not ignored.
+        var future = await client.SearchMetadataAsync(new MetadataSearchRequest
+        {
+            TakenAfter = anchor.FileCreatedAt.AddYears(50)
+        });
+        future.Items.Should().BeEmpty("takenAfter must actually constrain results");
     }
 
     [IntegrationFact]
@@ -115,6 +151,58 @@ public class ImmichApiIntegrationTests
                 var deleted = await client.DeleteAssetsAsync([uploadedAssetId], force: true);
                 deleted.Should().BeTrue("the integration upload should be removed from Immich");
             }
+        }
+    }
+
+    [MutationIntegrationFact]
+    public async Task AuthorizeUpload_MintsTokenThatUploadsIntoAlbum_WithoutApiKey()
+    {
+        var settings = IntegrationTestSettings.Load();
+        var client = settings.CreateClient();
+
+        string? albumId = null, linkId = null, assetId = null;
+        try
+        {
+            // 1. The tool mints an album + upload-only shared-link URL using the master key.
+            var json = await AssetTools.AuthorizeUpload(client, albumName: $"mcp-auth-upload-{Guid.NewGuid():N}");
+            using var doc = JsonDocument.Parse(json);
+            doc.RootElement.GetProperty("ok").GetBoolean().Should().BeTrue(json);
+            var result = doc.RootElement.GetProperty("result");
+            var uploadUrl = result.GetProperty("upload_url").GetString()!;
+            albumId = result.GetProperty("album_id").GetString();
+            linkId = result.GetProperty("shared_link_id").GetString();
+            uploadUrl.Should().Contain("?key=");
+
+            // 2. Upload with ONLY the token — a bare client, no x-api-key header.
+            using var http = new HttpClient();
+            using var form = new MultipartFormDataContent();
+            var file = new ByteArrayContent(OnePixelPng);
+            file.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+            form.Add(file, "assetData", "auth-upload.png");
+            var ts = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+            form.Add(new StringContent(ts), "fileCreatedAt");
+            form.Add(new StringContent(ts), "fileModifiedAt");
+            form.Add(new StringContent("mcp-test-device"), "deviceId");
+            form.Add(new StringContent($"auth-upload-{Guid.NewGuid():N}"), "deviceAssetId");
+
+            var resp = await http.PostAsync(uploadUrl, form);
+            resp.IsSuccessStatusCode.Should().BeTrue($"token-only upload should succeed, got {(int)resp.StatusCode}");
+            using var body = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            assetId = body.RootElement.GetProperty("id").GetString();
+            body.RootElement.GetProperty("status").GetString().Should().BeOneOf("created", "duplicate");
+
+            // 3. It landed in the album the tool created.
+            var album = await client.GetAlbumAsync(albumId!);
+            album!.AssetCount.Should().BeGreaterThanOrEqualTo(1);
+        }
+        finally
+        {
+            if (!string.IsNullOrWhiteSpace(assetId))
+                await client.DeleteAssetsAsync([assetId], force: true);
+            if (!string.IsNullOrWhiteSpace(linkId))
+                await client.DeleteSharedLinkAsync(linkId);
+            if (!string.IsNullOrWhiteSpace(albumId))
+                await client.DeleteAlbumAsync(albumId);
         }
     }
 
