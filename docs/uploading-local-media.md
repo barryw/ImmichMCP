@@ -24,17 +24,29 @@ agent (Claude Code, Codex, …) can drive it.
 
    ```bash
    URL='<upload_url>'
-   TS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-   find "<path>" -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
-        -o -iname '*.heic' -o -iname '*.heif' -o -iname '*.mp4' -o -iname '*.mov' \
-        -o -iname '*.gif' -o -iname '*.webp' -o -iname '*.dng' \) -print0 \
-   | xargs -0 -P 8 -I{} curl --retry 3 -sf -o /dev/null -w '%{http_code} {}\n' \
-       -X POST "$URL" \
-       -F 'assetData=@{}' -F 'deviceId=mcp-client' -F 'deviceAssetId={}' \
-       -F "fileCreatedAt=$TS" -F "fileModifiedAt=$TS"
+   TS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)   # fallback; EXIF capture date wins for real photos
+   # Upload ONLY real images/videos. Guard by actual CONTENT TYPE (file --mime-type), not by
+   # extension — so junk that merely looks like media is skipped: macOS AppleDouble files
+   # (._foo.jpg are application/octet-stream), .DS_Store, sidecars, mislabeled files.
+   # -not -name '.*' drops every dotfile (covers ._* and .DS_Store); the mime check is the
+   # real guarantee.
+   find "<path>" -type f -not -name '.*' -print0 \
+   | xargs -0 -P 8 -I{} sh -c '
+       f="$1"; url="$2"; ts="$3"
+       case "$(file --mime-type -b "$f")" in
+         image/*|video/*) ;;
+         *) echo "skip (not media)  $(basename "$f")"; exit 0 ;;
+       esac
+       code=$(curl --retry 3 -s -o /dev/null -w "%{http_code}" -X POST "$url" \
+         -F "assetData=@$f" -F "deviceId=mcp-client" -F "deviceAssetId=$f" \
+         -F "fileCreatedAt=$ts" -F "fileModifiedAt=$ts")
+       echo "$code  $(basename "$f")"
+     ' _ {} "$URL" "$TS"
    ```
 
-   `-P 8` runs 8 concurrent uploads. `201`=created, `200`=duplicate, anything else=failed.
+   `-P 8` runs 8 concurrent uploads. `201`=created, `200`=duplicate (already there),
+   `skip`=non-media, anything else=failed. Content-type gating is what makes it
+   "images and videos, nothing else."
 
 3. **Revoke** when done (optional): `immich_shared_links_delete(id: <shared_link_id>)`.
 
