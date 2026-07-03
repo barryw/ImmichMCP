@@ -1,12 +1,28 @@
 using System.Net;
 using FluentAssertions;
 using RichardSzalay.MockHttp;
+using ImmichMCP.Client;
 using ImmichMCP.Tests.Fixtures;
 
 namespace ImmichMCP.Tests.Client;
 
 public class ImmichClientAlbumTests
 {
+    [Fact]
+    public async Task GetAlbumAsync_Throws_OnServerError_NotSwallowedAsNotFound()
+    {
+        // A 404 is a legitimate "not found" (returns null); any OTHER error must surface,
+        // not be swallowed into null and mislabelled as NOT_FOUND.
+        var (client, handler) = MockHttpClientFactory.CreateMockClient();
+        handler.When(HttpMethod.Get, "*/albums/boom")
+            .Respond(HttpStatusCode.InternalServerError, "text/plain", "kaboom");
+
+        var act = () => client.GetAlbumAsync("boom");
+
+        var ex = await act.Should().ThrowAsync<ImmichApiException>();
+        ex.Which.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+    }
+
     [Fact]
     public async Task GetAlbumsAsync_ReturnsAlbums_WhenSuccessful()
     {
