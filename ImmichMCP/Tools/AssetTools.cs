@@ -4,6 +4,8 @@ using ModelContextProtocol.Server;
 using ImmichMCP.Client;
 using ImmichMCP.Models.Common;
 using ImmichMCP.Models.Assets;
+using ImmichMCP.Models.Albums;
+using ImmichMCP.Models.SharedLinks;
 using static ImmichMCP.Utils.ParsingHelpers;
 
 namespace ImmichMCP.Tools;
@@ -14,6 +16,103 @@ namespace ImmichMCP.Tools;
 [McpServerToolType]
 public static class AssetTools
 {
+    [McpServerTool(Name = "immich_assets_upload_authorize")]
+    [Description(
+        "Authorize a client-side bulk upload WITHOUT exposing the API key. Creates (or reuses) an album " +
+        "and returns a short-lived, upload-only shared-link URL. The client then POSTs files DIRECTLY to " +
+        "upload_url (multipart/form-data, field 'assetData', plus fileCreatedAt and fileModifiedAt as ISO-8601 " +
+        "datetimes WITH a 'Z' suffix) — no API key, no local install beyond curl. Every uploaded asset lands in " +
+        "the album. Re-running is safe and resumable: Immich deduplicates by file checksum, so already-uploaded " +
+        "files return status 'duplicate' and are not re-added.")]
+    public static async Task<string> AuthorizeUpload(
+        ImmichClient client,
+        [Description("Name of a NEW album to create for these uploads. Provide this OR album_id, not both.")] string? albumName = null,
+        [Description("Existing album ID (UUID) to upload into. Provide this OR album_name, not both.")] string? albumId = null,
+        [Description("Minutes until the upload URL expires (default 60, clamped to 1..1440).")] int ttlMinutes = 60)
+    {
+        var hasName = !string.IsNullOrWhiteSpace(albumName);
+        var hasId = !string.IsNullOrWhiteSpace(albumId);
+        if (hasName == hasId)
+        {
+            return JsonSerializer.Serialize(McpErrorResponse.Create(
+                ErrorCodes.Validation,
+                "Provide exactly one of album_name (to create a new album) or album_id (to use an existing one).",
+                meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }));
+        }
+
+        string resolvedAlbumId;
+        string resolvedAlbumName;
+        if (hasName)
+        {
+            var album = await client.CreateAlbumAsync(new AlbumCreateRequest { AlbumName = albumName! }).ConfigureAwait(false);
+            if (album == null)
+            {
+                return JsonSerializer.Serialize(McpErrorResponse.Create(
+                    ErrorCodes.UpstreamError,
+                    "Failed to create album for upload.",
+                    meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }));
+            }
+            resolvedAlbumId = album.Id;
+            resolvedAlbumName = album.AlbumName;
+        }
+        else
+        {
+            var album = await client.GetAlbumAsync(albumId!).ConfigureAwait(false);
+            if (album == null)
+            {
+                return JsonSerializer.Serialize(McpErrorResponse.Create(
+                    ErrorCodes.NotFound,
+                    $"Album with ID {albumId} not found.",
+                    meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }));
+            }
+            resolvedAlbumId = album.Id;
+            resolvedAlbumName = album.AlbumName;
+        }
+
+        var ttl = Math.Clamp(ttlMinutes, 1, 1440);
+        var expiresAt = DateTime.UtcNow.AddMinutes(ttl);
+
+        var link = await client.CreateSharedLinkAsync(new SharedLinkCreateRequest
+        {
+            Type = "ALBUM",
+            AlbumId = resolvedAlbumId,
+            AllowUpload = true,
+            AllowDownload = false,
+            ExpiresAt = expiresAt
+        }).ConfigureAwait(false);
+
+        if (link == null || string.IsNullOrEmpty(link.Key))
+        {
+            return JsonSerializer.Serialize(McpErrorResponse.Create(
+                ErrorCodes.UpstreamError,
+                "Failed to create upload authorization link.",
+                meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }));
+        }
+
+        var baseUrl = client.BaseUrl.TrimEnd('/');
+        var uploadUrl = $"{baseUrl}/api/assets?key={link.Key}";
+
+        var response = McpResponse<object>.Success(
+            new
+            {
+                upload_url = uploadUrl,
+                album_id = resolvedAlbumId,
+                album_name = resolvedAlbumName,
+                shared_link_id = link.Id,
+                expires_at = expiresAt.ToString("O"),
+                required_fields = new[] { "assetData", "fileCreatedAt", "fileModifiedAt" },
+                notes = "POST each file to upload_url with multipart/form-data. No API key needed. " +
+                        "Timestamps must be ISO-8601 with a 'Z'. Re-running skips existing files (status 'duplicate').",
+                curl_example =
+                    "TS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z); " +
+                    $"for f in /path/to/dir/*; do curl --retry 3 -sf -X POST \"{uploadUrl}\" " +
+                    "-F \"assetData=@$f\" -F \"deviceId=mcp-client\" -F \"deviceAssetId=$f\" " +
+                    "-F \"fileCreatedAt=$TS\" -F \"fileModifiedAt=$TS\"; done"
+            },
+            new McpMeta { ImmichBaseUrl = client.BaseUrl });
+        return JsonSerializer.Serialize(response);
+    }
+
     [McpServerTool(Name = "immich_assets_list")]
     [Description("List recent assets with optional filters and pagination.")]
     public static async Task<string> List(
