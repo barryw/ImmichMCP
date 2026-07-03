@@ -31,7 +31,8 @@ public class ImmichClient
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        Converters = { new Utils.UtcIsoDateTimeConverter() }
     };
 
     public ImmichClient(HttpClient httpClient, IOptions<ImmichOptions> options, ILogger<ImmichClient> logger)
@@ -146,16 +147,14 @@ public class ImmichClient
     /// </summary>
     public async Task<bool> BulkUpdateAssetsAsync(AssetBulkUpdateRequest request, CancellationToken cancellationToken = default)
     {
-        try
+        var response = await _httpClient.PutAsJsonAsync("api/assets", request, JsonOptions, cancellationToken).ConfigureAwait(false);
+
+        if (response.IsSuccessStatusCode)
         {
-            var response = await _httpClient.PutAsJsonAsync("api/assets", request, JsonOptions, cancellationToken).ConfigureAwait(false);
-            return response.IsSuccessStatusCode;
+            return true;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to bulk update assets");
-            return false;
-        }
+
+        throw await ImmichApiException.FromResponseAsync(response, "PUT", "api/assets", cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -163,20 +162,18 @@ public class ImmichClient
     /// </summary>
     public async Task<bool> DeleteAssetsAsync(string[] ids, bool force = false, CancellationToken cancellationToken = default)
     {
-        try
+        var request = new HttpRequestMessage(HttpMethod.Delete, "api/assets")
         {
-            var request = new HttpRequestMessage(HttpMethod.Delete, "api/assets")
-            {
-                Content = JsonContent.Create(new { ids, force }, options: JsonOptions)
-            };
-            var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            return response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NoContent;
-        }
-        catch (Exception ex)
+            Content = JsonContent.Create(new { ids, force }, options: JsonOptions)
+        };
+        var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+        if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NoContent)
         {
-            _logger.LogError(ex, "Failed to delete assets");
-            return false;
+            return true;
         }
+
+        throw await ImmichApiException.FromResponseAsync(response, "DELETE", "api/assets", cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -329,24 +326,15 @@ public class ImmichClient
         MetadataSearchRequest request,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var response = await _httpClient.PostAsJsonAsync("api/search/metadata", request, JsonOptions, cancellationToken).ConfigureAwait(false);
+        var response = await _httpClient.PostAsJsonAsync("api/search/metadata", request, JsonOptions, cancellationToken).ConfigureAwait(false);
 
-            if (response.IsSuccessStatusCode)
-            {
-                var result = await response.Content.ReadFromJsonAsync<SearchResult<Asset>>(JsonOptions, cancellationToken).ConfigureAwait(false);
-                return result?.Assets ?? new SearchAssetResult<Asset>();
-            }
-
-            await LogErrorResponse(response, "POST", "api/search/metadata").ConfigureAwait(false);
-            return new SearchAssetResult<Asset>();
-        }
-        catch (Exception ex)
+        if (response.IsSuccessStatusCode)
         {
-            _logger.LogError(ex, "Metadata search failed");
-            return new SearchAssetResult<Asset>();
+            var result = await response.Content.ReadFromJsonAsync<SearchResult<Asset>>(JsonOptions, cancellationToken).ConfigureAwait(false);
+            return result?.Assets ?? new SearchAssetResult<Asset>();
         }
+
+        throw await ImmichApiException.FromResponseAsync(response, "POST", "api/search/metadata", cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -356,24 +344,15 @@ public class ImmichClient
         SmartSearchRequest request,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var response = await _httpClient.PostAsJsonAsync("api/search/smart", request, JsonOptions, cancellationToken).ConfigureAwait(false);
+        var response = await _httpClient.PostAsJsonAsync("api/search/smart", request, JsonOptions, cancellationToken).ConfigureAwait(false);
 
-            if (response.IsSuccessStatusCode)
-            {
-                var result = await response.Content.ReadFromJsonAsync<SearchResult<Asset>>(JsonOptions, cancellationToken).ConfigureAwait(false);
-                return result?.Assets ?? new SearchAssetResult<Asset>();
-            }
-
-            await LogErrorResponse(response, "POST", "api/search/smart").ConfigureAwait(false);
-            return new SearchAssetResult<Asset>();
-        }
-        catch (Exception ex)
+        if (response.IsSuccessStatusCode)
         {
-            _logger.LogError(ex, "Smart search failed");
-            return new SearchAssetResult<Asset>();
+            var result = await response.Content.ReadFromJsonAsync<SearchResult<Asset>>(JsonOptions, cancellationToken).ConfigureAwait(false);
+            return result?.Assets ?? new SearchAssetResult<Asset>();
         }
+
+        throw await ImmichApiException.FromResponseAsync(response, "POST", "api/search/smart", cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -456,27 +435,18 @@ public class ImmichClient
     /// </summary>
     public async Task<List<BulkIdResponse>?> RemoveAssetsFromAlbumAsync(string albumId, string[] assetIds, CancellationToken cancellationToken = default)
     {
-        try
+        var request = new HttpRequestMessage(HttpMethod.Delete, $"api/albums/{albumId}/assets")
         {
-            var request = new HttpRequestMessage(HttpMethod.Delete, $"api/albums/{albumId}/assets")
-            {
-                Content = JsonContent.Create(new { ids = assetIds }, options: JsonOptions)
-            };
-            var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            Content = JsonContent.Create(new { ids = assetIds }, options: JsonOptions)
+        };
+        var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadFromJsonAsync<List<BulkIdResponse>>(JsonOptions, cancellationToken).ConfigureAwait(false);
-            }
-
-            await LogErrorResponse(response, "DELETE", $"api/albums/{albumId}/assets").ConfigureAwait(false);
-            return null;
-        }
-        catch (Exception ex)
+        if (response.IsSuccessStatusCode)
         {
-            _logger.LogError(ex, "Failed to remove assets from album");
-            return null;
+            return await response.Content.ReadFromJsonAsync<List<BulkIdResponse>>(JsonOptions, cancellationToken).ConfigureAwait(false);
         }
+
+        throw await ImmichApiException.FromResponseAsync(response, "DELETE", $"api/albums/{albumId}/assets", cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -594,27 +564,18 @@ public class ImmichClient
     /// </summary>
     public async Task<List<BulkIdResponse>?> UntagAssetsAsync(string tagId, string[] assetIds, CancellationToken cancellationToken = default)
     {
-        try
+        var request = new HttpRequestMessage(HttpMethod.Delete, $"api/tags/{tagId}/assets")
         {
-            var request = new HttpRequestMessage(HttpMethod.Delete, $"api/tags/{tagId}/assets")
-            {
-                Content = JsonContent.Create(new { ids = assetIds }, options: JsonOptions)
-            };
-            var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            Content = JsonContent.Create(new { ids = assetIds }, options: JsonOptions)
+        };
+        var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadFromJsonAsync<List<BulkIdResponse>>(JsonOptions, cancellationToken).ConfigureAwait(false);
-            }
-
-            await LogErrorResponse(response, "DELETE", $"api/tags/{tagId}/assets").ConfigureAwait(false);
-            return null;
-        }
-        catch (Exception ex)
+        if (response.IsSuccessStatusCode)
         {
-            _logger.LogError(ex, "Failed to untag assets");
-            return null;
+            return await response.Content.ReadFromJsonAsync<List<BulkIdResponse>>(JsonOptions, cancellationToken).ConfigureAwait(false);
         }
+
+        throw await ImmichApiException.FromResponseAsync(response, "DELETE", $"api/tags/{tagId}/assets", cancellationToken).ConfigureAwait(false);
     }
 
     #endregion
@@ -675,27 +636,18 @@ public class ImmichClient
     /// </summary>
     public async Task<List<BulkIdResponse>?> RemoveAssetsFromSharedLinkAsync(string linkId, string[] assetIds, CancellationToken cancellationToken = default)
     {
-        try
+        var request = new HttpRequestMessage(HttpMethod.Delete, $"api/shared-links/{linkId}/assets")
         {
-            var request = new HttpRequestMessage(HttpMethod.Delete, $"api/shared-links/{linkId}/assets")
-            {
-                Content = JsonContent.Create(new { ids = assetIds }, options: JsonOptions)
-            };
-            var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            Content = JsonContent.Create(new { ids = assetIds }, options: JsonOptions)
+        };
+        var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadFromJsonAsync<List<BulkIdResponse>>(JsonOptions, cancellationToken).ConfigureAwait(false);
-            }
-
-            await LogErrorResponse(response, "DELETE", $"api/shared-links/{linkId}/assets").ConfigureAwait(false);
-            return null;
-        }
-        catch (Exception ex)
+        if (response.IsSuccessStatusCode)
         {
-            _logger.LogError(ex, "Failed to remove assets from shared link");
-            return null;
+            return await response.Content.ReadFromJsonAsync<List<BulkIdResponse>>(JsonOptions, cancellationToken).ConfigureAwait(false);
         }
+
+        throw await ImmichApiException.FromResponseAsync(response, "DELETE", $"api/shared-links/{linkId}/assets", cancellationToken).ConfigureAwait(false);
     }
 
     #endregion
@@ -754,117 +706,76 @@ public class ImmichClient
 
     #region HTTP Helpers
 
+    // NOTE ON ERROR HANDLING: these helpers never swallow an upstream failure into a
+    // default/empty value. On a non-success status they throw ImmichApiException so the
+    // MCP boundary can report a spec-compliant tool execution error (isError: true).
+    // The single deliberate exception is 404 on a get-by-id, which is a legitimate
+    // "not found" result the caller maps to a NOT_FOUND response.
+
     private async Task<T?> GetAsync<T>(string url, CancellationToken cancellationToken)
     {
-        try
-        {
-            var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+        var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
 
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken).ConfigureAwait(false);
-            }
-
-            await LogErrorResponse(response, "GET", url).ConfigureAwait(false);
-            return default;
-        }
-        catch (Exception ex)
+        if (response.IsSuccessStatusCode)
         {
-            _logger.LogError(ex, "GET request failed: {Url}", url);
-            return default;
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken).ConfigureAwait(false);
         }
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return default; // legitimate not-found, surfaced by the tool as NOT_FOUND
+        }
+
+        throw await ImmichApiException.FromResponseAsync(response, "GET", url, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<T?> PostAsync<T>(string url, object request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var response = await _httpClient.PostAsJsonAsync(url, request, JsonOptions, cancellationToken).ConfigureAwait(false);
+        var response = await _httpClient.PostAsJsonAsync(url, request, JsonOptions, cancellationToken).ConfigureAwait(false);
 
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken).ConfigureAwait(false);
-            }
-
-            await LogErrorResponse(response, "POST", url).ConfigureAwait(false);
-            return default;
-        }
-        catch (Exception ex)
+        if (response.IsSuccessStatusCode)
         {
-            _logger.LogError(ex, "POST request failed: {Url}", url);
-            return default;
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken).ConfigureAwait(false);
         }
+
+        throw await ImmichApiException.FromResponseAsync(response, "POST", url, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<T?> PutAsync<T>(string url, object request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var response = await _httpClient.PutAsJsonAsync(url, request, JsonOptions, cancellationToken).ConfigureAwait(false);
+        var response = await _httpClient.PutAsJsonAsync(url, request, JsonOptions, cancellationToken).ConfigureAwait(false);
 
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken).ConfigureAwait(false);
-            }
-
-            await LogErrorResponse(response, "PUT", url).ConfigureAwait(false);
-            return default;
-        }
-        catch (Exception ex)
+        if (response.IsSuccessStatusCode)
         {
-            _logger.LogError(ex, "PUT request failed: {Url}", url);
-            return default;
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken).ConfigureAwait(false);
         }
+
+        throw await ImmichApiException.FromResponseAsync(response, "PUT", url, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<T?> PatchAsync<T>(string url, object request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var content = JsonContent.Create(request, options: JsonOptions);
-            var response = await _httpClient.PatchAsync(url, content, cancellationToken).ConfigureAwait(false);
+        var content = JsonContent.Create(request, options: JsonOptions);
+        var response = await _httpClient.PatchAsync(url, content, cancellationToken).ConfigureAwait(false);
 
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken).ConfigureAwait(false);
-            }
-
-            await LogErrorResponse(response, "PATCH", url).ConfigureAwait(false);
-            return default;
-        }
-        catch (Exception ex)
+        if (response.IsSuccessStatusCode)
         {
-            _logger.LogError(ex, "PATCH request failed: {Url}", url);
-            return default;
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken).ConfigureAwait(false);
         }
+
+        throw await ImmichApiException.FromResponseAsync(response, "PATCH", url, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> DeleteAsync(string url, CancellationToken cancellationToken)
     {
-        try
+        var response = await _httpClient.DeleteAsync(url, cancellationToken).ConfigureAwait(false);
+
+        if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NoContent)
         {
-            var response = await _httpClient.DeleteAsync(url, cancellationToken).ConfigureAwait(false);
-
-            if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NoContent)
-            {
-                return true;
-            }
-
-            await LogErrorResponse(response, "DELETE", url).ConfigureAwait(false);
-            return false;
+            return true;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "DELETE request failed: {Url}", url);
-            return false;
-        }
-    }
 
-    private async Task LogErrorResponse(HttpResponseMessage response, string method, string url)
-    {
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-        _logger.LogError("{Method} {Url} failed with {StatusCode}: {Body}",
-            method, url, (int)response.StatusCode, body);
+        throw await ImmichApiException.FromResponseAsync(response, "DELETE", url, cancellationToken).ConfigureAwait(false);
     }
 
     private static string GetContentType(string fileName) => Path.GetExtension(fileName).ToLowerInvariant() switch

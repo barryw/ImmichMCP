@@ -1,9 +1,12 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using ImmichMCP.Client;
+using ImmichMCP.Models.Common;
 
 namespace ImmichMCP.Tools.Gateway;
 
@@ -139,13 +142,92 @@ public sealed class ImmichToolGateway
 
         try
         {
-            return await definition.Tool.InvokeAsync(request, cancellationToken).ConfigureAwait(false);
+            var result = await definition.Tool.InvokeAsync(request, cancellationToken).ConfigureAwait(false);
+            // Tools serialize their own {"ok":false,...} error envelopes as text; per the MCP
+            // spec a tool execution error must also flag the result with isError: true.
+            return MarkErrorEnvelope(result);
+        }
+        catch (ImmichApiException ex)
+        {
+            _logger.LogError(ex, "Immich tool {ToolName} failed upstream ({StatusCode})", toolName, (int)ex.StatusCode);
+            return JsonResult(BuildUpstreamError(ex), isError: true);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Dynamic Immich tool invocation failed for {ToolName}", toolName);
             return TextResult(ex.Message, isError: true);
         }
+    }
+
+    /// <summary>
+    /// Flags a result as an error when the tool serialized an {"ok": false} envelope,
+    /// so the transport-level isError matches the application-level outcome.
+    /// </summary>
+    internal static CallToolResult MarkErrorEnvelope(CallToolResult result)
+    {
+        if (result.IsError == true)
+        {
+            return result;
+        }
+
+        foreach (var block in result.Content)
+        {
+            if (block is TextContentBlock text && IsErrorEnvelope(text.Text))
+            {
+                return new CallToolResult { Content = result.Content, IsError = true };
+            }
+        }
+
+        return result;
+    }
+
+    internal static bool IsErrorEnvelope(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || text[0] != '{')
+        {
+            return false;
+        }
+
+        try
+        {
+            return JsonNode.Parse(text) is JsonObject obj
+                && obj.TryGetPropertyValue("ok", out var ok)
+                && ok is JsonValue value
+                && value.TryGetValue<bool>(out var isOk)
+                && !isOk;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    internal static object BuildUpstreamError(ImmichApiException ex)
+    {
+        var code = ex.StatusCode switch
+        {
+            HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => ErrorCodes.AuthFailed,
+            HttpStatusCode.NotFound => ErrorCodes.NotFound,
+            HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity => ErrorCodes.Validation,
+            HttpStatusCode.TooManyRequests => ErrorCodes.RateLimit,
+            _ => ErrorCodes.UpstreamError
+        };
+
+        return new
+        {
+            ok = false,
+            error = new
+            {
+                code,
+                message = ex.Message,
+                details = new
+                {
+                    status = (int)ex.StatusCode,
+                    path = ex.Path,
+                    body = ex.ResponseBody
+                }
+            }
+        };
     }
 
     public IReadOnlyCollection<Tool> GetVisibleTools(object? session)
