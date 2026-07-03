@@ -78,6 +78,87 @@ public class ImmichToolGatewayTests
             "tool:immich_nope");
     }
 
+    [Fact]
+    public void EnablingEachCategory_ExposesExactlyThatCategorysToolsPlusBootstrap()
+    {
+        using var services = CreateServices();
+        var registry = services.GetRequiredService<ImmichToolRegistry>();
+        var state = services.GetRequiredService<ImmichToolSessionState>();
+        var gateway = services.GetRequiredService<ImmichToolGateway>();
+
+        foreach (var category in registry.Categories)
+        {
+            var session = new object();
+            var expected = registry.ResolveToolNames([], [category]);
+            expected.Should().NotBeEmpty($"category '{category}' should resolve to tools");
+
+            state.Enable(session, expected);
+            var visible = gateway.GetVisibleTools(session).Select(t => t.Name).ToList();
+
+            visible.Should().Contain(ImmichToolGateway.ListToolsName);
+            visible.Should().Contain(ImmichToolGateway.EnableToolsName);
+            visible.Should().Contain(expected);
+            visible.Should().HaveCount(expected.Count + 2,
+                $"enabling '{category}' should expose only its tools plus the two bootstrap tools");
+        }
+    }
+
+    [Fact]
+    public void EnablingByExactToolName_ExposesThatTool()
+    {
+        using var services = CreateServices();
+        var registry = services.GetRequiredService<ImmichToolRegistry>();
+        var state = services.GetRequiredService<ImmichToolSessionState>();
+        var gateway = services.GetRequiredService<ImmichToolGateway>();
+        var session = new object();
+
+        state.Enable(session, registry.ResolveToolNames(["immich_assets_upload_authorize"], []));
+
+        gateway.GetVisibleTools(session).Select(t => t.Name)
+            .Should().Contain("immich_assets_upload_authorize");
+    }
+
+    [Fact]
+    public void ReadSelector_EnablesOnlyReadOnlyTools()
+    {
+        using var services = CreateServices();
+        var registry = services.GetRequiredService<ImmichToolRegistry>();
+        var state = services.GetRequiredService<ImmichToolSessionState>();
+        var session = new object();
+
+        var readTools = registry.ResolveToolNames([], ["read"]);
+
+        readTools.Should().NotBeEmpty();
+        readTools.Should().OnlyContain(name => registry.Tools.Single(t => t.Name == name).IsReadOnly);
+        readTools.Should().NotContain("immich_assets_delete");
+    }
+
+    [Fact]
+    public void AllSelector_EnablesEveryRegisteredTool()
+    {
+        using var services = CreateServices();
+        var registry = services.GetRequiredService<ImmichToolRegistry>();
+
+        registry.ResolveToolNames([], ["all"]).Should().HaveCount(registry.Tools.Count);
+    }
+
+    [Fact]
+    public void EnabledTools_AreScopedPerSession()
+    {
+        using var services = CreateServices();
+        var registry = services.GetRequiredService<ImmichToolRegistry>();
+        var state = services.GetRequiredService<ImmichToolSessionState>();
+        var gateway = services.GetRequiredService<ImmichToolGateway>();
+        var sessionA = new object();
+        var sessionB = new object();
+
+        state.Enable(sessionA, registry.ResolveToolNames([], ["tags"]));
+
+        gateway.GetVisibleTools(sessionA).Select(t => t.Name).Should().Contain("immich_tags_list");
+        gateway.GetVisibleTools(sessionB).Select(t => t.Name).Should().BeEquivalentTo(
+            ImmichToolGateway.ListToolsName, ImmichToolGateway.EnableToolsName);
+    }
+
     private static ServiceProvider CreateServices()
     {
         var services = new ServiceCollection();
