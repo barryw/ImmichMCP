@@ -5,6 +5,7 @@ A Model Context Protocol (MCP) server for [Immich](https://immich.app/) - the se
 ## Features
 
 - **Asset Management**: Search, browse, upload, update, and delete photos/videos
+- **Direct Local Upload**: Authorize a short-lived, upload-only URL and stream a local folder straight to Immich — no API key exposed, nothing to install beyond `curl`, resumable by content dedup
 - **Smart Search**: ML-powered semantic search using CLIP (e.g., "sunset at the beach")
 - **Metadata Search**: Filter by date, location, camera, people, and more
 - **Albums**: Create, manage, and share photo albums
@@ -50,6 +51,13 @@ Mutation coverage, including upload/delete, is disabled by default. Enable it ex
 export IMMICH_INTEGRATION_MUTATION_TESTS=true
 scripts/run-immich-integration-tests.sh
 ```
+
+With mutation coverage enabled, `ToolCoverageIntegrationTests` exercises **all 49 tools**
+against the live server. It is strictly non-destructive to existing data: every mutation
+runs on throwaway fixtures the test creates (uploaded PNGs, an album, a tag, shared links,
+an activity) and teardown deletes only those; the two tools that would mutate real,
+un-creatable data (`immich_people_update`, `immich_people_merge`) are exercised with bogus
+IDs only and must refuse safely.
 
 ### Docker Compose MCP smoke test
 
@@ -192,6 +200,8 @@ Or with Docker:
 | `immich_assets_upload` | Upload asset (base64) |
 | `immich_assets_upload_from_path` | Upload from local file path |
 | `immich_assets_upload_authorize` | Mint a short-lived, upload-only URL so a client can upload local files **directly** to Immich (no API key exposed) |
+| `immich_assets_upload_init` | Start an out-of-band upload session; returns a URL to POST a file to |
+| `immich_assets_upload_status` | Check the status of an out-of-band upload session |
 | `immich_assets_update` | Update asset metadata |
 | `immich_assets_bulk_update` | Bulk update multiple assets |
 | `immich_assets_delete` | Delete asset(s) |
@@ -347,6 +357,12 @@ Error responses:
   "meta": { ... }
 }
 ```
+
+Upstream failures are never swallowed into empty/success-looking results: a non-2xx
+response from Immich surfaces as an error, and per the MCP spec every tool-execution
+error is returned as a result with `isError: true` (not a JSON-RPC protocol error), so
+the calling model can see and react to it. Error `code` maps the upstream status
+(`AUTH_FAILED`, `NOT_FOUND`, `VALIDATION`, `RATE_LIMIT`, `UPSTREAM_ERROR`).
 
 ## License
 
