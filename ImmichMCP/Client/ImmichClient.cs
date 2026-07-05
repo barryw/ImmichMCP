@@ -501,9 +501,40 @@ public class ImmichClient
     /// <summary>
     /// Gets assets for a person.
     /// </summary>
+    /// <remarks>
+    /// Immich removed <c>GET /api/people/{id}/assets</c> (returns 404 on recent versions).
+    /// Resolve a person's assets via <c>POST /api/search/metadata</c> with <c>personIds</c>,
+    /// paginating until the last partial page.
+    /// </remarks>
     public async Task<List<Asset>> GetPersonAssetsAsync(string personId, CancellationToken cancellationToken = default)
     {
-        return await GetAsync<List<Asset>>($"api/people/{personId}/assets", cancellationToken).ConfigureAwait(false) ?? [];
+        const int pageSize = 100;
+        const int maxPages = 50; // safety cap (~5000 assets)
+        var all = new List<Asset>();
+        for (int page = 1; page <= maxPages; page++)
+        {
+            var request = new MetadataSearchRequest
+            {
+                PersonIds = new[] { personId },
+                Page = page,
+                Size = pageSize,
+                WithExif = true,
+            };
+            var result = await SearchMetadataAsync(request, cancellationToken).ConfigureAwait(false);
+            var items = result.Items;
+            if (items.Count == 0)
+            {
+                break;
+            }
+
+            all.AddRange(items);
+            if (items.Count < pageSize)
+            {
+                break;
+            }
+        }
+
+        return all;
     }
 
     #endregion
