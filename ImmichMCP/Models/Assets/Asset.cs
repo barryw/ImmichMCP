@@ -62,7 +62,7 @@ public record Asset
     public bool HasMetadata { get; init; }
 
     [JsonPropertyName("duration")]
-    public int? Duration { get; init; }
+    public string? Duration { get; init; }
 
     [JsonPropertyName("visibility")]
     public string Visibility { get; init; } = "timeline";
@@ -329,7 +329,7 @@ public record AssetSummary
     public bool IsArchived { get; init; }
 
     [JsonPropertyName("duration")]
-    public int? Duration { get; init; }
+    public string? Duration { get; init; }
 
     [JsonPropertyName("visibility")]
     public string Visibility { get; init; } = "timeline";
