@@ -31,6 +31,19 @@ public class ImmichToolGatewayTests
     }
 
     [Fact]
+    public void TagUpdateSchema_ExposesOnlyFieldsSupportedByImmich()
+    {
+        using var services = CreateServices();
+        var registry = services.GetRequiredService<ImmichToolRegistry>();
+
+        registry.TryGetTool("immich_tags_update", out var definition).Should().BeTrue();
+        var properties = definition.Tool.ProtocolTool.InputSchema.GetProperty("properties");
+
+        properties.TryGetProperty("color", out _).Should().BeTrue();
+        properties.TryGetProperty("name", out _).Should().BeFalse();
+    }
+
+    [Fact]
     public void GatewayStartsWithOnlyBootstrapTools()
     {
         using var services = CreateServices();

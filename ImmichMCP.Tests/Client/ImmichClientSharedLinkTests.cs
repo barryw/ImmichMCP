@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using FluentAssertions;
 using RichardSzalay.MockHttp;
 using ImmichMCP.Models.SharedLinks;
@@ -95,5 +96,31 @@ public class ImmichClientSharedLinkTests
 
         // Assert
         result.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AddAssetsToSharedLinkAsync_MapsAssetIdResponse()
+    {
+        // Arrange
+        const string responseJson = """
+            [
+              {
+                "assetId": "asset-1",
+                "success": true
+              }
+            ]
+            """;
+
+        var (client, handler) = MockHttpClientFactory.CreateMockClient();
+        handler.When(HttpMethod.Put, "*/shared-links/link-1/assets")
+            .Respond("application/json", responseJson);
+
+        // Act
+        var result = await client.AddAssetsToSharedLinkAsync("link-1", ["asset-1"]);
+
+        // Assert
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(result));
+        json.RootElement[0].GetProperty("assetId").GetString().Should().Be("asset-1");
+        json.RootElement[0].GetProperty("success").GetBoolean().Should().BeTrue();
     }
 }

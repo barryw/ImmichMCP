@@ -43,9 +43,6 @@ public record TagCreateRequest
 /// </summary>
 public record TagUpdateRequest
 {
-    [JsonPropertyName("name")]
-    public string? Name { get; init; }
-
     [JsonPropertyName("color")]
     public string? Color { get; init; }
 }

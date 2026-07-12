@@ -59,22 +59,25 @@ public static class HealthTools
                 features!.Trash,
                 features.Map,
                 features.ReverseGeocoding,
-                features.Import,
+                features.ImportFaces,
                 features.Sidecar,
                 features.Search,
                 features.FacialRecognition,
                 features.Oauth,
+                features.OauthAutoLaunch,
                 features.PasswordLogin,
                 features.ConfigFile,
                 features.DuplicateDetection,
                 features.Email,
-                features.SmartSearch
+                features.SmartSearch,
+                features.Ocr,
+                features.RealtimeTranscoding
             } : null,
             endpoints = new
             {
                 assets = new
                 {
-                    list = "/api/assets",
+                    list = "/api/search/metadata",
                     get = "/api/assets/{id}",
                     upload = "/api/assets",
                     update = "/api/assets/{id}",
@@ -107,7 +110,7 @@ public static class HealthTools
                     get = "/api/people/{id}",
                     update = "/api/people/{id}",
                     merge = "/api/people/{id}/merge",
-                    assets = "/api/people/{id}/assets"
+                    assets = "/api/search/metadata"
                 },
                 tags = new
                 {
