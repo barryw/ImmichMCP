@@ -528,12 +528,44 @@ public class ImmichClient
     }
 
     /// <summary>
-    /// Gets assets for a person.
+    /// Gets all assets for a person.
     /// </summary>
+    /// <remarks>
+    /// Immich removed <c>GET /api/people/{id}/assets</c>. Follow metadata-search
+    /// pagination tokens so this compatibility method retains its complete-list contract.
+    /// </remarks>
     public async Task<List<Asset>> GetPersonAssetsAsync(string personId, CancellationToken cancellationToken = default)
     {
-        var result = await SearchPersonAssetsAsync(personId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        return result.Items;
+        const int pageSize = 1000;
+        var assets = new List<Asset>();
+        var visitedPages = new HashSet<int>();
+        var page = 1;
+
+        while (true)
+        {
+            if (!visitedPages.Add(page))
+            {
+                throw new InvalidOperationException($"Immich returned a repeated metadata search page token '{page}'.");
+            }
+
+            var result = await SearchPersonAssetsAsync(
+                personId,
+                page,
+                pageSize,
+                cancellationToken).ConfigureAwait(false);
+            assets.AddRange(result.Items);
+
+            if (result.NextPage is null)
+            {
+                return assets;
+            }
+
+            if (!int.TryParse(result.NextPage, out page) || page < 1)
+            {
+                throw new InvalidOperationException(
+                    $"Immich returned an invalid metadata search nextPage token '{result.NextPage}'.");
+            }
+        }
     }
 
     /// <summary>
