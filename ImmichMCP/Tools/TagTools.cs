@@ -101,16 +101,14 @@ public static class TagTools
     }
 
     [McpServerTool(Name = "immich_tags_update")]
-    [Description("Update a tag.")]
+    [Description("Update a tag's color.")]
     public static async Task<string> Update(
         ImmichClient client,
         [Description("Tag ID (UUID)")] string id,
-        [Description("New tag name")] string? name = null,
         [Description("New tag color (hex, e.g., '#ff0000')")] string? color = null)
     {
         var request = new TagUpdateRequest
         {
-            Name = name,
             Color = color
         };
 

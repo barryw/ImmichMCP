@@ -37,11 +37,14 @@ public record PeopleResponse
     [JsonPropertyName("total")]
     public int Total { get; init; }
 
-    [JsonPropertyName("visible")]
-    public int Visible { get; init; }
-
     [JsonPropertyName("hidden")]
     public int Hidden { get; init; }
+
+    [JsonPropertyName("hasNextPage")]
+    public bool HasNextPage { get; init; }
+
+    [JsonIgnore]
+    public int Visible => Math.Max(0, Total - Hidden);
 }
 
 /// <summary>

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using ImmichMCP.Utils;
 
 namespace ImmichMCP.Models.Assets;
 
@@ -62,6 +63,7 @@ public record Asset
     public bool HasMetadata { get; init; }
 
     [JsonPropertyName("duration")]
+    [JsonConverter(typeof(DurationMillisecondsJsonConverter))]
     public int? Duration { get; init; }
 
     [JsonPropertyName("visibility")]
@@ -222,6 +224,18 @@ public record AssetStatistics
 
     [JsonPropertyName("total")]
     public int Total { get; init; }
+}
+
+/// <summary>
+/// Response returned when an asset upload is accepted.
+/// </summary>
+public record AssetMediaResponse
+{
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string Status { get; init; } = string.Empty;
 }
 
 /// <summary>

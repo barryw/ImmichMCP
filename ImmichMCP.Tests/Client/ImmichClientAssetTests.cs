@@ -42,6 +42,70 @@ public class ImmichClientAssetTests
     }
 
     [Fact]
+    public async Task GetAssetsAsync_DeserializesDuration_WhenLegacyImmichReturnsTimespanString()
+    {
+        // Arrange
+        const string responseJson = """
+            {
+              "assets": {
+                "total": 1,
+                "count": 1,
+                "items": [
+                  {
+                    "id": "asset-1",
+                    "duration": "0:00:01.23400"
+                  }
+                ],
+                "nextPage": null
+              }
+            }
+            """;
+
+        var (client, handler) = MockHttpClientFactory.CreateMockClient();
+        handler.When(HttpMethod.Post, "*/search/metadata")
+            .Respond("application/json", responseJson);
+
+        // Act
+        var result = await client.GetAssetsAsync();
+
+        // Assert
+        result.Should().ContainSingle();
+        result[0].Duration.Should().Be(1234);
+    }
+
+    [Fact]
+    public async Task GetAssetsAsync_DeserializesDuration_WhenImmichV3ReturnsMilliseconds()
+    {
+        // Arrange
+        const string responseJson = """
+            {
+              "assets": {
+                "total": 1,
+                "count": 1,
+                "items": [
+                  {
+                    "id": "asset-1",
+                    "duration": 1234
+                  }
+                ],
+                "nextPage": null
+              }
+            }
+            """;
+
+        var (client, handler) = MockHttpClientFactory.CreateMockClient();
+        handler.When(HttpMethod.Post, "*/search/metadata")
+            .Respond("application/json", responseJson);
+
+        // Act
+        var result = await client.GetAssetsAsync();
+
+        // Assert
+        result.Should().ContainSingle();
+        result[0].Duration.Should().Be(1234);
+    }
+
+    [Fact]
     public async Task GetAssetsAsync_ReturnsEmptyList_WhenNoAssets()
     {
         // Arrange
@@ -159,6 +223,47 @@ public class ImmichClientAssetTests
 
         // Assert
         result.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task UploadAssetAsync_FetchesFullAsset_AfterMediaResponse()
+    {
+        // Arrange
+        const string uploadResponseJson = """
+            {
+              "id": "asset-1",
+              "status": "created"
+            }
+            """;
+        const string assetResponseJson = """
+            {
+              "id": "asset-1",
+              "type": "IMAGE",
+              "originalFileName": "photo.jpg",
+              "visibility": "archive",
+              "duration": 1234
+            }
+            """;
+
+        var (client, handler) = MockHttpClientFactory.CreateMockClient();
+        handler.When(HttpMethod.Post, "*/assets")
+            .Respond("application/json", uploadResponseJson);
+        handler.When(HttpMethod.Get, "*/assets/asset-1")
+            .Respond("application/json", assetResponseJson);
+
+        // Act
+        var result = await client.UploadAssetAsync(
+            [1, 2, 3],
+            "photo.jpg",
+            DateTime.UtcNow,
+            isArchived: true);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.Id.Should().Be("asset-1");
+        result.OriginalFileName.Should().Be("photo.jpg");
+        result.Type.Should().Be("IMAGE");
+        result.Visibility.Should().Be("archive");
     }
 
     [Fact]

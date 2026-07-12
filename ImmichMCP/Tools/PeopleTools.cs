@@ -23,7 +23,10 @@ public static class PeopleTools
         [Description("Page number (default: 1)")] int page = 1,
         [Description("Page size (default: 25, max: 100)")] int size = 25)
     {
-        var result = await client.GetPeopleAsync(withHidden).ConfigureAwait(false);
+        size = Math.Min(Math.Max(size, 1), 100);
+        page = Math.Max(page, 1);
+
+        var result = await client.GetPeopleAsync(withHidden, page, size).ConfigureAwait(false);
 
         if (result == null)
         {
@@ -35,22 +38,11 @@ public static class PeopleTools
             return JsonSerializer.Serialize(errorResponse);
         }
 
-        // Enforce pagination limits
-        size = Math.Min(Math.Max(size, 1), 100);
-        page = Math.Max(page, 1);
-
-        var allPeople = result.People;
-        var totalCount = allPeople.Count;
-        var skip = (page - 1) * size;
-
-        // Apply pagination
-        var pagedPeople = allPeople
-            .Skip(skip)
-            .Take(size)
+        var pagedPeople = result.People
             .Select(p => PersonSummary.FromPerson(p))
             .ToList();
 
-        var hasMore = skip + pagedPeople.Count < totalCount;
+        var hasMore = result.HasNextPage || (long)page * size < result.Total;
         var nextPage = hasMore ? $"page={page + 1}&size={size}" : null;
 
         var response = McpResponse<object>.Success(
@@ -64,7 +56,7 @@ public static class PeopleTools
             {
                 Page = page,
                 PageSize = size,
-                Total = totalCount,
+                Total = result.Total,
                 Next = nextPage,
                 ImmichBaseUrl = client.BaseUrl
             }
@@ -218,24 +210,14 @@ public static class PeopleTools
         [Description("Page number (default: 1)")] int page = 1,
         [Description("Page size (default: 25, max: 100)")] int size = 25)
     {
-        var assets = await client.GetPersonAssetsAsync(personId).ConfigureAwait(false);
-
-        // Enforce pagination limits
         size = Math.Min(Math.Max(size, 1), 100);
         page = Math.Max(page, 1);
 
-        var totalCount = assets.Count;
-        var skip = (page - 1) * size;
+        var result = await client.SearchPersonAssetsAsync(personId, page, size).ConfigureAwait(false);
 
-        // Apply pagination
-        var pagedAssets = assets
-            .Skip(skip)
-            .Take(size)
+        var pagedAssets = result.Items
             .Select(AssetSummary.FromAsset)
             .ToList();
-
-        var hasMore = skip + pagedAssets.Count < totalCount;
-        var nextPage = hasMore ? $"page={page + 1}&size={size}" : null;
 
         var response = McpResponse<object>.Success(
             pagedAssets,
@@ -243,8 +225,8 @@ public static class PeopleTools
             {
                 Page = page,
                 PageSize = size,
-                Total = totalCount,
-                Next = nextPage,
+                Total = result.Total,
+                Next = result.NextPage,
                 ImmichBaseUrl = client.BaseUrl
             }
         );

@@ -69,6 +69,9 @@ public record ActivityStatistics
 {
     [JsonPropertyName("comments")]
     public int Comments { get; init; }
+
+    [JsonPropertyName("likes")]
+    public int Likes { get; init; }
 }
 
 /// <summary>

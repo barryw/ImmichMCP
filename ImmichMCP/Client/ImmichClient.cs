@@ -220,7 +220,17 @@ public class ImmichClient
             var response = await _httpClient.PostAsync("api/assets", formContent, cancellationToken).ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
             {
-                return await response.Content.ReadFromJsonAsync<Asset>(JsonOptions, cancellationToken).ConfigureAwait(false);
+                var uploadResult = await response.Content
+                    .ReadFromJsonAsync<AssetMediaResponse>(JsonOptions, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (string.IsNullOrWhiteSpace(uploadResult?.Id))
+                {
+                    _logger.LogError("Immich returned a successful upload response without an asset ID");
+                    return null;
+                }
+
+                return await GetAssetAsync(uploadResult.Id, cancellationToken).ConfigureAwait(false);
             }
 
             var error = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -464,10 +474,29 @@ public class ImmichClient
     /// <summary>
     /// Gets all people.
     /// </summary>
-    public async Task<PeopleResponse?> GetPeopleAsync(bool? withHidden = null, CancellationToken cancellationToken = default)
+    public Task<PeopleResponse?> GetPeopleAsync(
+        bool? withHidden = null,
+        CancellationToken cancellationToken = default)
     {
-        var url = withHidden.HasValue
-            ? $"api/people?withHidden={withHidden.Value.ToString().ToLower()}"
+        return GetPeopleAsync(withHidden, page: null, size: null, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets a page of recognized people.
+    /// </summary>
+    public async Task<PeopleResponse?> GetPeopleAsync(
+        bool? withHidden,
+        int? page,
+        int? size,
+        CancellationToken cancellationToken = default)
+    {
+        var queryParams = new List<string>();
+        if (withHidden.HasValue) queryParams.Add($"withHidden={withHidden.Value.ToString().ToLower()}");
+        if (page.HasValue) queryParams.Add($"page={page.Value}");
+        if (size.HasValue) queryParams.Add($"size={size.Value}");
+
+        var url = queryParams.Count > 0
+            ? $"api/people?{string.Join("&", queryParams)}"
             : "api/people";
 
         return await GetAsync<PeopleResponse>(url, cancellationToken).ConfigureAwait(false);
@@ -499,42 +528,64 @@ public class ImmichClient
     }
 
     /// <summary>
-    /// Gets assets for a person.
+    /// Gets all assets for a person.
     /// </summary>
     /// <remarks>
-    /// Immich removed <c>GET /api/people/{id}/assets</c> (returns 404 on recent versions).
-    /// Resolve a person's assets via <c>POST /api/search/metadata</c> with <c>personIds</c>,
-    /// paginating until the last partial page.
+    /// Immich removed <c>GET /api/people/{id}/assets</c>. Follow metadata-search
+    /// pagination tokens so this compatibility method retains its complete-list contract.
     /// </remarks>
     public async Task<List<Asset>> GetPersonAssetsAsync(string personId, CancellationToken cancellationToken = default)
     {
-        const int pageSize = 100;
-        const int maxPages = 50; // safety cap (~5000 assets)
-        var all = new List<Asset>();
-        for (int page = 1; page <= maxPages; page++)
+        const int pageSize = 1000;
+        var assets = new List<Asset>();
+        var visitedPages = new HashSet<int>();
+        var page = 1;
+
+        while (true)
         {
-            var request = new MetadataSearchRequest
+            if (!visitedPages.Add(page))
             {
-                PersonIds = new[] { personId },
-                Page = page,
-                Size = pageSize,
-                WithExif = true,
-            };
-            var result = await SearchMetadataAsync(request, cancellationToken).ConfigureAwait(false);
-            var items = result.Items;
-            if (items.Count == 0)
-            {
-                break;
+                throw new InvalidOperationException($"Immich returned a repeated metadata search page token '{page}'.");
             }
 
-            all.AddRange(items);
-            if (items.Count < pageSize)
+            var result = await SearchPersonAssetsAsync(
+                personId,
+                page,
+                pageSize,
+                cancellationToken).ConfigureAwait(false);
+            assets.AddRange(result.Items);
+
+            if (result.NextPage is null)
             {
-                break;
+                return assets;
+            }
+
+            if (!int.TryParse(result.NextPage, out page) || page < 1)
+            {
+                throw new InvalidOperationException(
+                    $"Immich returned an invalid metadata search nextPage token '{result.NextPage}'.");
             }
         }
+    }
 
-        return all;
+    /// <summary>
+    /// Searches assets associated with a person using Immich's metadata search endpoint.
+    /// </summary>
+    public async Task<SearchAssetResult<Asset>> SearchPersonAssetsAsync(
+        string personId,
+        int? page = null,
+        int? size = null,
+        CancellationToken cancellationToken = default)
+    {
+        return await SearchMetadataAsync(
+            new MetadataSearchRequest
+            {
+                PersonIds = [personId],
+                Page = page,
+                Size = size,
+                WithExif = true
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     #endregion
@@ -656,16 +707,16 @@ public class ImmichClient
     /// <summary>
     /// Adds assets to a shared link.
     /// </summary>
-    public async Task<List<BulkIdResponse>?> AddAssetsToSharedLinkAsync(string linkId, string[] assetIds, CancellationToken cancellationToken = default)
+    public async Task<List<AssetIdResponse>?> AddAssetsToSharedLinkAsync(string linkId, string[] assetIds, CancellationToken cancellationToken = default)
     {
         var request = new { ids = assetIds };
-        return await PutAsync<List<BulkIdResponse>>($"api/shared-links/{linkId}/assets", request, cancellationToken).ConfigureAwait(false);
+        return await PutAsync<List<AssetIdResponse>>($"api/shared-links/{linkId}/assets", request, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Removes assets from a shared link.
     /// </summary>
-    public async Task<List<BulkIdResponse>?> RemoveAssetsFromSharedLinkAsync(string linkId, string[] assetIds, CancellationToken cancellationToken = default)
+    public async Task<List<AssetIdResponse>?> RemoveAssetsFromSharedLinkAsync(string linkId, string[] assetIds, CancellationToken cancellationToken = default)
     {
         var request = new HttpRequestMessage(HttpMethod.Delete, $"api/shared-links/{linkId}/assets")
         {
@@ -675,7 +726,7 @@ public class ImmichClient
 
         if (response.IsSuccessStatusCode)
         {
-            return await response.Content.ReadFromJsonAsync<List<BulkIdResponse>>(JsonOptions, cancellationToken).ConfigureAwait(false);
+            return await response.Content.ReadFromJsonAsync<List<AssetIdResponse>>(JsonOptions, cancellationToken).ConfigureAwait(false);
         }
 
         throw await ImmichApiException.FromResponseAsync(response, "DELETE", $"api/shared-links/{linkId}/assets", cancellationToken).ConfigureAwait(false);
@@ -842,6 +893,21 @@ public record BulkIdResponse
 }
 
 /// <summary>
+/// Response for shared-link asset membership operations.
+/// </summary>
+public record AssetIdResponse
+{
+    [JsonPropertyName("assetId")]
+    public string AssetId { get; init; } = string.Empty;
+
+    [JsonPropertyName("success")]
+    public bool Success { get; init; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; init; }
+}
+
+/// <summary>
 /// Server information.
 /// </summary>
 public record ServerInfo
@@ -873,7 +939,7 @@ public record ServerFeatures
     public bool Trash { get; init; }
     public bool Map { get; init; }
     public bool ReverseGeocoding { get; init; }
-    public bool Import { get; init; }
+    public bool ImportFaces { get; init; }
     public bool Sidecar { get; init; }
     public bool Search { get; init; }
     public bool FacialRecognition { get; init; }
@@ -884,4 +950,6 @@ public record ServerFeatures
     public bool DuplicateDetection { get; init; }
     public bool Email { get; init; }
     public bool SmartSearch { get; init; }
+    public bool Ocr { get; init; }
+    public bool RealtimeTranscoding { get; init; }
 }

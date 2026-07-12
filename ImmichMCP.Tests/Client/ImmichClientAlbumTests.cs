@@ -66,6 +66,35 @@ public class ImmichClientAlbumTests
     }
 
     [Fact]
+    public async Task GetAlbumAsync_MapsContributorAssetCount_FromImmichContract()
+    {
+        // Arrange
+        const string responseJson = """
+            {
+              "id": "album-1",
+              "contributorCounts": [
+                {
+                  "userId": "user-1",
+                  "assetCount": 7
+                }
+              ]
+            }
+            """;
+
+        var (client, handler) = MockHttpClientFactory.CreateMockClient();
+        handler.When(HttpMethod.Get, "*/albums/album-1")
+            .Respond("application/json", responseJson);
+
+        // Act
+        var result = await client.GetAlbumAsync("album-1");
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.ContributorCounts.Should().ContainSingle();
+        result.ContributorCounts![0].AssetCount.Should().Be(7);
+    }
+
+    [Fact]
     public async Task GetAlbumAsync_ReturnsNull_WhenNotFound()
     {
         // Arrange
