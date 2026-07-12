@@ -160,8 +160,8 @@ public record AlbumContributorCount
     [JsonPropertyName("userId")]
     public string UserId { get; init; } = string.Empty;
 
-    [JsonPropertyName("count")]
-    public int Count { get; init; }
+    [JsonPropertyName("assetCount")]
+    public int AssetCount { get; init; }
 }
 
 /// <summary>

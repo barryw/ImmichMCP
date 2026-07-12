@@ -161,7 +161,7 @@ public static class ActivityTools
     }
 
     [McpServerTool(Name = "immich_activities_statistics")]
-    [Description("Get activity statistics (comment count) for an album or asset.")]
+    [Description("Get activity statistics (comment and like counts) for an album or asset.")]
     public static async Task<string> Statistics(
         ImmichClient client,
         [Description("Album ID (UUID)")] string albumId,
@@ -194,7 +194,8 @@ public static class ActivityTools
             {
                 album_id = albumId,
                 asset_id = assetId,
-                comments = stats.Comments
+                comments = stats.Comments,
+                likes = stats.Likes
             },
             new McpMeta { ImmichBaseUrl = client.BaseUrl }
         );

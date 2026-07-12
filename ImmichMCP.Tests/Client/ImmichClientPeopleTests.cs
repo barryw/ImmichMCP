@@ -8,6 +8,46 @@ namespace ImmichMCP.Tests.Client;
 public class ImmichClientPeopleTests
 {
     [Fact]
+    public async Task GetPersonAssetsAsync_UsesMetadataSearchWithPersonFilter()
+    {
+        // Arrange
+        const string responseJson = """
+            {
+              "assets": {
+                "total": 1,
+                "count": 1,
+                "items": [
+                  {
+                    "id": "asset-1",
+                    "duration": 1234
+                  }
+                ],
+                "nextPage": null
+              }
+            }
+            """;
+
+        var (client, handler) = MockHttpClientFactory.CreateMockClient();
+        string? requestBody = null;
+        handler.When(HttpMethod.Post, "*/search/metadata")
+            .With(request =>
+            {
+                requestBody = request.Content!.ReadAsStringAsync().Result;
+                return true;
+            })
+            .Respond("application/json", responseJson);
+
+        // Act
+        var result = await client.GetPersonAssetsAsync("person-1");
+
+        // Assert
+        result.Should().ContainSingle();
+        result[0].Id.Should().Be("asset-1");
+        requestBody.Should().Contain("\"personIds\":[\"person-1\"]");
+        requestBody.Should().Contain("\"withExif\":true");
+    }
+
+    [Fact]
     public async Task GetPeopleAsync_ReturnsPeople_WhenSuccessful()
     {
         // Arrange
