@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Protocol;
 using ImmichMCP.Client;
 using ImmichMCP.Configuration;
 using ImmichMCP.Services;
@@ -77,6 +78,9 @@ public class ToolCoverageIntegrationTests
         string? tagId = null;
 
         static string Trunc(string s) => s.Length > 180 ? s[..180] + "…" : s;
+
+        static string FirstText(CallToolResult result) =>
+            result.Content.OfType<TextContentBlock>().First().Text;
 
         async Task<JsonElement?> Ok(string name, Func<Task<string>> call, Func<JsonElement, bool>? assert = null)
         {
@@ -238,8 +242,8 @@ public class ToolCoverageIntegrationTests
             {
                 await Ok("immich_assets_get", () => AssetTools.Get(client, asset1));
                 await Ok("immich_assets_exif", () => AssetTools.GetExif(client, asset1));
-                await Ok("immich_assets_download_original", () => AssetTools.DownloadOriginal(client, asset1));
-                await Ok("immich_assets_download_thumbnail", () => AssetTools.DownloadThumbnail(client, asset1));
+                await Ok("immich_assets_download_original", async () => FirstText(await AssetTools.DownloadOriginal(client, asset1)));
+                await Ok("immich_assets_download_thumbnail", async () => FirstText(await AssetTools.DownloadThumbnail(client, asset1)));
                 await Ok("immich_assets_update", () => AssetTools.Update(client, asset1, isFavorite: true, description: "mcp tool test"));
                 await Ok("immich_assets_bulk_update", () => AssetTools.BulkUpdate(client, asset1, isFavorite: false, dryRun: false, confirm: true));
             }

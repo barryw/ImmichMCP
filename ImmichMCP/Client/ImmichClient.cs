@@ -44,6 +44,8 @@ public class ImmichClient
 
     public string BaseUrl => _options.BaseUrl;
 
+    public string DownloadMode => _options.DownloadMode;
+
     #region Health & Status
 
     /// <summary>
@@ -324,6 +326,18 @@ public class ImmichClient
             PreviewUrl = $"{baseUrl}/api/assets/{id}/thumbnail?size=preview"
         };
     }
+
+    /// <summary>
+    /// Downloads the preview-size thumbnail bytes for an asset.
+    /// </summary>
+    public async Task<(byte[] Bytes, string MimeType)> DownloadAssetThumbnailAsync(string id, CancellationToken cancellationToken = default)
+        => await DownloadBytesAsync($"api/assets/{id}/thumbnail?size=preview", cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// Downloads the original file bytes for an asset.
+    /// </summary>
+    public async Task<(byte[] Bytes, string MimeType)> DownloadAssetOriginalAsync(string id, CancellationToken cancellationToken = default)
+        => await DownloadBytesAsync($"api/assets/{id}/original", cancellationToken).ConfigureAwait(false);
 
     #endregion
 
@@ -793,6 +807,20 @@ public class ImmichClient
     // MCP boundary can report a spec-compliant tool execution error (isError: true).
     // The single deliberate exception is 404 on a get-by-id, which is a legitimate
     // "not found" result the caller maps to a NOT_FOUND response.
+
+    private async Task<(byte[] Bytes, string MimeType)> DownloadBytesAsync(string url, CancellationToken cancellationToken)
+    {
+        var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await ImmichApiException.FromResponseAsync(response, "GET", url, cancellationToken).ConfigureAwait(false);
+        }
+
+        var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        var mimeType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+        return (bytes, mimeType);
+    }
 
     private async Task<T?> GetAsync<T>(string url, CancellationToken cancellationToken)
     {
