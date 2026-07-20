@@ -810,16 +810,40 @@ public class ImmichClient
 
     private async Task<(byte[] Bytes, string MimeType)> DownloadBytesAsync(string url, CancellationToken cancellationToken)
     {
-        var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+        var maxBytes = _options.MaxInlineDownloadBytes;
+
+        using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode)
         {
             throw await ImmichApiException.FromResponseAsync(response, "GET", url, cancellationToken).ConfigureAwait(false);
         }
 
-        var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        var contentLength = response.Content.Headers.ContentLength;
+        if (contentLength > maxBytes)
+        {
+            throw new InlineDownloadTooLargeException(url, contentLength, maxBytes);
+        }
+
         var mimeType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
-        return (bytes, mimeType);
+
+        // Bounded read: Content-Length can be absent (chunked) or lie, so never
+        // buffer more than the cap regardless of what the headers said.
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            if (buffer.Length + read > maxBytes)
+            {
+                throw new InlineDownloadTooLargeException(url, contentLength, maxBytes);
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        return (buffer.ToArray(), mimeType);
     }
 
     private async Task<T?> GetAsync<T>(string url, CancellationToken cancellationToken)

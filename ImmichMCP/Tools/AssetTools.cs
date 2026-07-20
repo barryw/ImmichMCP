@@ -211,9 +211,10 @@ public static class AssetTools
     [Description("Get the original asset file. Returns a download URL, or the file content inline when DOWNLOAD_MODE=base64.")]
     public static async Task<CallToolResult> DownloadOriginal(
         ImmichClient client,
-        [Description("Asset ID (UUID)")] string id)
+        [Description("Asset ID (UUID)")] string id,
+        CancellationToken cancellationToken = default)
     {
-        var asset = await client.GetAssetAsync(id).ConfigureAwait(false);
+        var asset = await client.GetAssetAsync(id, cancellationToken).ConfigureAwait(false);
 
         if (asset == null)
         {
@@ -238,7 +239,16 @@ public static class AssetTools
             return TextResult(JsonSerializer.Serialize(urlResponse));
         }
 
-        var (bytes, mimeType) = await client.DownloadAssetOriginalAsync(id).ConfigureAwait(false);
+        byte[] bytes;
+        string mimeType;
+        try
+        {
+            (bytes, mimeType) = await client.DownloadAssetOriginalAsync(id, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InlineDownloadTooLargeException ex)
+        {
+            return TooLargeResult(id, ex, downloadInfo.OriginalUrl, client);
+        }
 
         var response = McpResponse<object>.Success(
             new
@@ -258,9 +268,10 @@ public static class AssetTools
     [Description("Get thumbnail and preview URLs for an asset. When DOWNLOAD_MODE=base64, returns the preview image content inline instead.")]
     public static async Task<CallToolResult> DownloadThumbnail(
         ImmichClient client,
-        [Description("Asset ID (UUID)")] string id)
+        [Description("Asset ID (UUID)")] string id,
+        CancellationToken cancellationToken = default)
     {
-        var asset = await client.GetAssetAsync(id).ConfigureAwait(false);
+        var asset = await client.GetAssetAsync(id, cancellationToken).ConfigureAwait(false);
 
         if (asset == null)
         {
@@ -285,7 +296,16 @@ public static class AssetTools
             return TextResult(JsonSerializer.Serialize(urlResponse));
         }
 
-        var (bytes, mimeType) = await client.DownloadAssetThumbnailAsync(id).ConfigureAwait(false);
+        byte[] bytes;
+        string mimeType;
+        try
+        {
+            (bytes, mimeType) = await client.DownloadAssetThumbnailAsync(id, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InlineDownloadTooLargeException ex)
+        {
+            return TooLargeResult(id, ex, downloadInfo.PreviewUrl, client);
+        }
 
         var response = McpResponse<object>.Success(
             new
@@ -309,6 +329,19 @@ public static class AssetTools
         TextResult(JsonSerializer.Serialize(McpErrorResponse.Create(
             ErrorCodes.NotFound,
             $"Asset with ID {id} not found",
+            meta: new McpMeta { ImmichBaseUrl = client.BaseUrl })));
+
+    private static CallToolResult TooLargeResult(string id, InlineDownloadTooLargeException ex, string? downloadUrl, ImmichClient client) =>
+        TextResult(JsonSerializer.Serialize(McpErrorResponse.Create(
+            ErrorCodes.PayloadTooLarge,
+            ex.Message,
+            details: new
+            {
+                id,
+                file_size = ex.ContentLength,
+                max_inline_download_bytes = ex.MaxInlineDownloadBytes,
+                download_url = downloadUrl
+            },
             meta: new McpMeta { ImmichBaseUrl = client.BaseUrl })));
 
     private static CallToolResult TextResult(string json)

@@ -10,7 +10,9 @@ public static class MockHttpClientFactory
 {
     public static (ImmichClient Client, MockHttpMessageHandler Handler) CreateMockClient(
         string baseUrl = "https://photos.example.com",
-        string apiKey = "test-api-key")
+        string apiKey = "test-api-key",
+        string downloadMode = "url",
+        long maxInlineDownloadBytes = 25 * 1024 * 1024)
     {
         var mockHandler = new MockHttpMessageHandler();
         var httpClient = mockHandler.ToHttpClient();
@@ -22,7 +24,8 @@ public static class MockHttpClientFactory
             BaseUrl = baseUrl,
             ApiKey = apiKey,
             MaxPageSize = 100,
-            DownloadMode = "url"
+            DownloadMode = downloadMode,
+            MaxInlineDownloadBytes = maxInlineDownloadBytes
         });
 
         var logger = new LoggerFactory().CreateLogger<ImmichClient>();

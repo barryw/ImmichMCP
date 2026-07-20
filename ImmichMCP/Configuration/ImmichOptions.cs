@@ -24,4 +24,9 @@ public class ImmichOptions
     /// Download mode: "url" returns URLs, "base64" returns encoded content.
     /// </summary>
     public string DownloadMode { get; set; } = "url";
+
+    /// <summary>
+    /// Maximum asset size (in bytes) returned inline when DownloadMode is "base64".
+    /// </summary>
+    public long MaxInlineDownloadBytes { get; set; } = 25 * 1024 * 1024;
 }

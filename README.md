@@ -113,6 +113,7 @@ docker run -e IMMICH_BASE_URL="https://photos.example.com" \
 | `IMMICH_API_KEY` | Yes | - | API key for authentication |
 | `MCP_LOG_LEVEL` | No | `Information` | Logging level |
 | `DOWNLOAD_MODE` | No | `url` | `url` returns URLs, `base64` returns the file content inline as MCP image/resource content |
+| `MAX_INLINE_DOWNLOAD_BYTES` | No | `26214400` | Max asset size returned inline with `DOWNLOAD_MODE=base64`; larger assets get a `PAYLOAD_TOO_LARGE` error that includes the download URL |
 | `MAX_PAGE_SIZE` | No | `100` | Maximum items per page |
 | `MCP_PORT` | No | `5000` | HTTP server port |
 | `IMMICH_TOOL_MODE` | No | `static` | `static` exposes all tools; `gateway` exposes `immich_tools_list` and `immich_tools_enable` first |
