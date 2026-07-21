@@ -112,7 +112,8 @@ docker run -e IMMICH_BASE_URL="https://photos.example.com" \
 | `IMMICH_BASE_URL` | Yes | - | Base URL of your Immich instance |
 | `IMMICH_API_KEY` | Yes | - | API key for authentication |
 | `MCP_LOG_LEVEL` | No | `Information` | Logging level |
-| `DOWNLOAD_MODE` | No | `url` | `url` returns URLs, `base64` returns encoded content |
+| `DOWNLOAD_MODE` | No | `url` | `url` returns URLs, `base64` returns the file content inline as MCP image/resource content |
+| `MAX_INLINE_DOWNLOAD_BYTES` | No | `26214400` | Max asset size returned inline with `DOWNLOAD_MODE=base64`; larger assets get a `PAYLOAD_TOO_LARGE` error that includes the download URL |
 | `MAX_PAGE_SIZE` | No | `100` | Maximum items per page |
 | `MCP_PORT` | No | `5000` | HTTP server port |
 | `IMMICH_TOOL_MODE` | No | `static` | `static` exposes all tools; `gateway` exposes `immich_tools_list` and `immich_tools_enable` first |
@@ -170,8 +171,8 @@ Or with Docker:
 | `immich_assets_list` | List recent assets with filters |
 | `immich_assets_get` | Get full asset metadata |
 | `immich_assets_exif` | Get EXIF data for an asset |
-| `immich_assets_download_original` | Get download URL for original |
-| `immich_assets_download_thumbnail` | Get thumbnail/preview URLs |
+| `immich_assets_download_original` | Get download URL for original (or inline content with `DOWNLOAD_MODE=base64`) |
+| `immich_assets_download_thumbnail` | Get thumbnail/preview URLs (or inline preview image with `DOWNLOAD_MODE=base64`) |
 | `immich_assets_upload` | Upload asset (base64) |
 | `immich_assets_upload_from_path` | Upload from local file path |
 | `immich_assets_upload_authorize` | Mint a short-lived, upload-only URL so a client can upload local files **directly** to Immich (no API key exposed) |

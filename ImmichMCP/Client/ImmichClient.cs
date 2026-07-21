@@ -44,6 +44,8 @@ public class ImmichClient
 
     public string BaseUrl => _options.BaseUrl;
 
+    public string DownloadMode => _options.DownloadMode;
+
     #region Health & Status
 
     /// <summary>
@@ -324,6 +326,18 @@ public class ImmichClient
             PreviewUrl = $"{baseUrl}/api/assets/{id}/thumbnail?size=preview"
         };
     }
+
+    /// <summary>
+    /// Downloads the preview-size thumbnail bytes for an asset.
+    /// </summary>
+    public async Task<(byte[] Bytes, string MimeType)> DownloadAssetThumbnailAsync(string id, CancellationToken cancellationToken = default)
+        => await DownloadBytesAsync($"api/assets/{id}/thumbnail?size=preview", cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// Downloads the original file bytes for an asset.
+    /// </summary>
+    public async Task<(byte[] Bytes, string MimeType)> DownloadAssetOriginalAsync(string id, CancellationToken cancellationToken = default)
+        => await DownloadBytesAsync($"api/assets/{id}/original", cancellationToken).ConfigureAwait(false);
 
     #endregion
 
@@ -793,6 +807,44 @@ public class ImmichClient
     // MCP boundary can report a spec-compliant tool execution error (isError: true).
     // The single deliberate exception is 404 on a get-by-id, which is a legitimate
     // "not found" result the caller maps to a NOT_FOUND response.
+
+    private async Task<(byte[] Bytes, string MimeType)> DownloadBytesAsync(string url, CancellationToken cancellationToken)
+    {
+        var maxBytes = _options.MaxInlineDownloadBytes;
+
+        using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await ImmichApiException.FromResponseAsync(response, "GET", url, cancellationToken).ConfigureAwait(false);
+        }
+
+        var contentLength = response.Content.Headers.ContentLength;
+        if (contentLength > maxBytes)
+        {
+            throw new InlineDownloadTooLargeException(url, contentLength, maxBytes);
+        }
+
+        var mimeType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+
+        // Bounded read: Content-Length can be absent (chunked) or lie, so never
+        // buffer more than the cap regardless of what the headers said.
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            if (buffer.Length + read > maxBytes)
+            {
+                throw new InlineDownloadTooLargeException(url, contentLength, maxBytes);
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        return (buffer.ToArray(), mimeType);
+    }
 
     private async Task<T?> GetAsync<T>(string url, CancellationToken cancellationToken)
     {

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using ImmichMCP.Client;
 using ImmichMCP.Models.Common;
@@ -207,71 +208,175 @@ public static class AssetTools
     }
 
     [McpServerTool(Name = "immich_assets_download_original")]
-    [Description("Get download URL for the original asset file.")]
-    public static async Task<string> DownloadOriginal(
+    [Description("Get the original asset file. Returns a download URL, or the file content inline when DOWNLOAD_MODE=base64.")]
+    public static async Task<CallToolResult> DownloadOriginal(
         ImmichClient client,
-        [Description("Asset ID (UUID)")] string id)
+        [Description("Asset ID (UUID)")] string id,
+        CancellationToken cancellationToken = default)
     {
-        var asset = await client.GetAssetAsync(id).ConfigureAwait(false);
+        var asset = await client.GetAssetAsync(id, cancellationToken).ConfigureAwait(false);
 
         if (asset == null)
         {
-            var errorResponse = McpErrorResponse.Create(
-                ErrorCodes.NotFound,
-                $"Asset with ID {id} not found",
-                meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }
-            );
-            return JsonSerializer.Serialize(errorResponse);
+            return AssetNotFoundResult(id, client);
         }
 
         var downloadInfo = client.GetAssetDownloadInfo(id, asset.OriginalFileName);
+
+        if (!IsBase64Mode(client))
+        {
+            var urlResponse = McpResponse<object>.Success(
+                new
+                {
+                    id,
+                    original_file_name = asset.OriginalFileName,
+                    original_url = downloadInfo.OriginalUrl,
+                    mime_type = asset.OriginalMimeType,
+                    file_size = asset.ExifInfo?.FileSizeInByte
+                },
+                new McpMeta { ImmichBaseUrl = client.BaseUrl }
+            );
+            return TextResult(JsonSerializer.Serialize(urlResponse));
+        }
+
+        byte[] bytes;
+        string mimeType;
+        try
+        {
+            (bytes, mimeType) = await client.DownloadAssetOriginalAsync(id, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InlineDownloadTooLargeException ex)
+        {
+            return TooLargeResult(id, ex, downloadInfo.OriginalUrl, client);
+        }
 
         var response = McpResponse<object>.Success(
             new
             {
                 id,
                 original_file_name = asset.OriginalFileName,
-                original_url = downloadInfo.OriginalUrl,
-                mime_type = asset.OriginalMimeType,
-                file_size = asset.ExifInfo?.FileSizeInByte
+                mime_type = mimeType,
+                file_size = bytes.Length,
+                encoding = "base64"
             },
             new McpMeta { ImmichBaseUrl = client.BaseUrl }
         );
-        return JsonSerializer.Serialize(response);
+        return BinaryResult(JsonSerializer.Serialize(response), bytes, mimeType, downloadInfo.OriginalUrl);
     }
 
     [McpServerTool(Name = "immich_assets_download_thumbnail")]
-    [Description("Get thumbnail and preview URLs for an asset.")]
-    public static async Task<string> DownloadThumbnail(
+    [Description("Get thumbnail and preview URLs for an asset. When DOWNLOAD_MODE=base64, returns the preview image content inline instead.")]
+    public static async Task<CallToolResult> DownloadThumbnail(
         ImmichClient client,
-        [Description("Asset ID (UUID)")] string id)
+        [Description("Asset ID (UUID)")] string id,
+        CancellationToken cancellationToken = default)
     {
-        var asset = await client.GetAssetAsync(id).ConfigureAwait(false);
+        var asset = await client.GetAssetAsync(id, cancellationToken).ConfigureAwait(false);
 
         if (asset == null)
         {
-            var errorResponse = McpErrorResponse.Create(
-                ErrorCodes.NotFound,
-                $"Asset with ID {id} not found",
-                meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }
-            );
-            return JsonSerializer.Serialize(errorResponse);
+            return AssetNotFoundResult(id, client);
         }
 
         var downloadInfo = client.GetAssetDownloadInfo(id, asset.OriginalFileName);
+
+        if (!IsBase64Mode(client))
+        {
+            var urlResponse = McpResponse<object>.Success(
+                new
+                {
+                    id,
+                    original_file_name = asset.OriginalFileName,
+                    thumbnail_url = downloadInfo.ThumbnailUrl,
+                    preview_url = downloadInfo.PreviewUrl,
+                    thumbhash = asset.Thumbhash
+                },
+                new McpMeta { ImmichBaseUrl = client.BaseUrl }
+            );
+            return TextResult(JsonSerializer.Serialize(urlResponse));
+        }
+
+        byte[] bytes;
+        string mimeType;
+        try
+        {
+            (bytes, mimeType) = await client.DownloadAssetThumbnailAsync(id, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InlineDownloadTooLargeException ex)
+        {
+            return TooLargeResult(id, ex, downloadInfo.PreviewUrl, client);
+        }
 
         var response = McpResponse<object>.Success(
             new
             {
                 id,
                 original_file_name = asset.OriginalFileName,
-                thumbnail_url = downloadInfo.ThumbnailUrl,
-                preview_url = downloadInfo.PreviewUrl,
+                mime_type = mimeType,
+                file_size = bytes.Length,
+                encoding = "base64",
                 thumbhash = asset.Thumbhash
             },
             new McpMeta { ImmichBaseUrl = client.BaseUrl }
         );
-        return JsonSerializer.Serialize(response);
+        return BinaryResult(JsonSerializer.Serialize(response), bytes, mimeType, downloadInfo.PreviewUrl);
+    }
+
+    private static bool IsBase64Mode(ImmichClient client) =>
+        string.Equals(client.DownloadMode, "base64", StringComparison.OrdinalIgnoreCase);
+
+    private static CallToolResult AssetNotFoundResult(string id, ImmichClient client) =>
+        TextResult(JsonSerializer.Serialize(McpErrorResponse.Create(
+            ErrorCodes.NotFound,
+            $"Asset with ID {id} not found",
+            meta: new McpMeta { ImmichBaseUrl = client.BaseUrl })));
+
+    private static CallToolResult TooLargeResult(string id, InlineDownloadTooLargeException ex, string? downloadUrl, ImmichClient client) =>
+        TextResult(JsonSerializer.Serialize(McpErrorResponse.Create(
+            ErrorCodes.PayloadTooLarge,
+            ex.Message,
+            details: new
+            {
+                id,
+                file_size = ex.ContentLength,
+                max_inline_download_bytes = ex.MaxInlineDownloadBytes,
+                download_url = downloadUrl
+            },
+            meta: new McpMeta { ImmichBaseUrl = client.BaseUrl })));
+
+    private static CallToolResult TextResult(string json)
+    {
+        return new CallToolResult
+        {
+            Content =
+            [
+                new TextContentBlock
+                {
+                    Text = json
+                }
+            ]
+        };
+    }
+
+    private static CallToolResult BinaryResult(string json, byte[] bytes, string mimeType, string? uri)
+    {
+        ContentBlock binaryBlock = mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+            ? ImageContentBlock.FromBytes(bytes, mimeType)
+            : new EmbeddedResourceBlock
+            {
+                Resource = BlobResourceContents.FromBytes(bytes, uri ?? string.Empty, mimeType)
+            };
+        return new CallToolResult
+        {
+            Content =
+            [
+                new TextContentBlock
+                {
+                    Text = json
+                },
+                binaryBlock
+            ]
+        };
     }
 
     [McpServerTool(Name = "immich_assets_upload")]

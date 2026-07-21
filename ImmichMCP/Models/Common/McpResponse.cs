@@ -114,4 +114,5 @@ public static class ErrorCodes
     public const string RateLimit = "RATE_LIMIT";
     public const string Unknown = "UNKNOWN";
     public const string ConfirmationRequired = "CONFIRMATION_REQUIRED";
+    public const string PayloadTooLarge = "PAYLOAD_TOO_LARGE";
 }

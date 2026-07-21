@@ -188,6 +188,10 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
         options.DownloadMode = Environment.GetEnvironmentVariable("DOWNLOAD_MODE")
                                ?? configuration.GetValue<string>("Immich:DownloadMode")
                                ?? "url";
+
+        options.MaxInlineDownloadBytes = Environment.GetEnvironmentVariable("MAX_INLINE_DOWNLOAD_BYTES") is string maxInlineStr && long.TryParse(maxInlineStr, out var maxInline)
+            ? maxInline
+            : configuration.GetValue<long?>("Immich:MaxInlineDownloadBytes") ?? 25 * 1024 * 1024;
     });
 
     // Configure retry policy for transient errors
