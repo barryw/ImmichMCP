@@ -320,9 +320,8 @@ public class ToolCoverageIntegrationTests
             // ===================== ASSETS delete tool (on a fixture) =====================
             if (asset2 is not null)
             {
-                // (dry-run intentionally returns CONFIRMATION_REQUIRED; the real delete is the tool test)
                 var del = await Ok("immich_assets_delete",
-                    () => AssetTools.Delete(client, asset2, force: true, dryRun: false, confirm: true));
+                    () => AssetTools.Delete(client, asset2, force: true, confirm: true));
                 if (del is not null) createdAssets.Remove(asset2); // deleted via the tool
             }
 

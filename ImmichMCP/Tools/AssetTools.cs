@@ -627,7 +627,6 @@ public static class AssetTools
         ImmichClient client,
         [Description("Asset IDs (comma-separated UUIDs)")] string assetIds,
         [Description("Force delete (bypass trash)")] bool force = false,
-        [Description("Dry run mode - shows what would be deleted without applying")] bool dryRun = true,
         [Description("Must be true to confirm deletion")] bool confirm = false)
     {
         var ids = ParseStringArray(assetIds);
@@ -642,7 +641,7 @@ public static class AssetTools
             return JsonSerializer.Serialize(errorResponse);
         }
 
-        if (dryRun || !confirm)
+        if (!confirm)
         {
             // Get asset info for dry run
             var assetInfos = new List<object>();
