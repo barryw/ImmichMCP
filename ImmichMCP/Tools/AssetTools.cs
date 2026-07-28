@@ -621,9 +621,18 @@ public static class AssetTools
         return JsonSerializer.Serialize(response);
     }
 
+    [Obsolete("Use DeleteAssets instead.")]
+    public static Task<string> Delete(
+        ImmichClient client,
+        [Description("Asset IDs (comma-separated UUIDs)")] string assetIds,
+        [Description("Force delete (bypass trash)")] bool force = false,
+        [Description("Dry run mode - shows what would be deleted without applying")] bool dryRun = true,
+        [Description("Must be true to confirm deletion")] bool confirm = false)
+        => DeleteAssets(client, assetIds, force, !dryRun && confirm);
+
     [McpServerTool(Name = "immich_assets_delete")]
     [Description("Delete asset(s). Requires explicit confirmation.")]
-    public static async Task<string> Delete(
+    public static async Task<string> DeleteAssets(
         ImmichClient client,
         [Description("Asset IDs (comma-separated UUIDs)")] string assetIds,
         [Description("Force delete (bypass trash)")] bool force = false,

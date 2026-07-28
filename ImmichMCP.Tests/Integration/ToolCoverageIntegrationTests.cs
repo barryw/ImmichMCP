@@ -321,7 +321,7 @@ public class ToolCoverageIntegrationTests
             if (asset2 is not null)
             {
                 var del = await Ok("immich_assets_delete",
-                    () => AssetTools.Delete(client, asset2, force: true, confirm: true));
+                    () => AssetTools.DeleteAssets(client, asset2, force: true, confirm: true));
                 if (del is not null) createdAssets.Remove(asset2); // deleted via the tool
             }
 
