@@ -621,14 +621,23 @@ public static class AssetTools
         return JsonSerializer.Serialize(response);
     }
 
+    [Obsolete("Use DeleteAssets instead.")]
+    public static Task<string> Delete(
+        ImmichClient client,
+        string assetIds,
+        bool force = false,
+        bool dryRun = true,
+        bool confirm = false)
+        => DeleteAssets(client, assetIds, force, confirm, dryRun);
+
     [McpServerTool(Name = "immich_assets_delete")]
-    [Description("Delete asset(s). Requires explicit confirmation.")]
-    public static async Task<string> Delete(
+    [Description("Delete asset(s). Returns a preview unless confirm=true.")]
+    public static async Task<string> DeleteAssets(
         ImmichClient client,
         [Description("Asset IDs (comma-separated UUIDs)")] string assetIds,
         [Description("Force delete (bypass trash)")] bool force = false,
-        [Description("Dry run mode - shows what would be deleted without applying")] bool dryRun = true,
-        [Description("Must be true to confirm deletion")] bool confirm = false)
+        [Description("Must be true to confirm deletion")] bool confirm = false,
+        [Description("Deprecated - omit. When true, forces a preview even if confirm=true.")] bool? dryRun = null)
     {
         var ids = ParseStringArray(assetIds);
 
@@ -642,7 +651,9 @@ public static class AssetTools
             return JsonSerializer.Serialize(errorResponse);
         }
 
-        if (dryRun || !confirm)
+        // dryRun is retained, deprecated, only so callers written against the old
+        // two-switch contract keep getting a preview instead of a surprise deletion.
+        if (!confirm || dryRun == true)
         {
             // Get asset info for dry run
             var assetInfos = new List<object>();
