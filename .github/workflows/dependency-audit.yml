@@ -40,7 +40,10 @@ jobs:
             echo "::error::dotnet list package did not complete cleanly (exit $STATUS); treating as a failed audit"
             exit 1
           fi
-          if echo "$OUTPUT" | grep -qi "vulnerable packages"; then
+          # Match the phrasing used only when vulnerabilities are present. A clean run
+          # prints "has no vulnerable packages given the current sources", so a looser
+          # match on "vulnerable packages" reports a finding on every green build.
+          if echo "$OUTPUT" | grep -q "has the following vulnerable packages"; then
             echo "::error::Vulnerable NuGet packages detected"
             exit 1
           fi
