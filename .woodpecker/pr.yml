@@ -35,3 +35,33 @@ steps:
       - dotnet build -c Release
       - dotnet test -c Release --logger "console;verbosity=detailed"
     depends_on: [commitlint]
+
+  # Fail the PR if any package, direct or transitive, has a known advisory.
+  - name: vulnerability-audit
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    environment:
+      DOTNET_CLI_UI_LANGUAGE: en
+    commands:
+      - |
+        set +e
+        OUTPUT=$(dotnet list package --vulnerable --include-transitive 2>&1)
+        STATUS=$?
+        set -e
+        echo "$OUTPUT"
+
+        # Fail closed: a command that could not complete is not a clean audit.
+        if [ "$STATUS" -ne 0 ]; then
+          echo "dotnet list package did not complete cleanly (exit $STATUS); treating as a failed audit"
+          exit 1
+        fi
+
+        # Match only the phrasing used when something is actually vulnerable. A clean
+        # run prints "has no vulnerable packages given the current sources", so a looser
+        # match on "vulnerable packages" reports a finding on every green build.
+        if echo "$OUTPUT" | grep -q "has the following vulnerable packages"; then
+          echo "Vulnerable NuGet packages detected"
+          exit 1
+        fi
+
+        echo "No known vulnerable packages"
+    depends_on: [commitlint]
