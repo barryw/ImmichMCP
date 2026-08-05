@@ -46,7 +46,10 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 30
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health/ready
               port: 5000
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 6
+            failureThreshold: 3

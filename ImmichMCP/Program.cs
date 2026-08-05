@@ -155,8 +155,20 @@ else
         }
     }).DisableAntiforgery();
 
-    // Health check endpoint
+    // Health check endpoint (liveness only: is the process up, no upstream dependency)
     app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+
+    // Readiness endpoint: verifies the process can actually reach Immich.
+    // Results are cached for a short window so frequent probe ticks don't hammer Immich.
+    var readinessCache = new ReadinessCache();
+    app.MapGet("/health/ready", async (ImmichClient immichClient, CancellationToken cancellationToken) =>
+    {
+        var (success, version, error) = await readinessCache.GetOrRefreshAsync(immichClient, cancellationToken).ConfigureAwait(false);
+
+        return success
+            ? Results.Ok(new { status = "ready", immich_connected = true, version })
+            : Results.Json(new { status = "not_ready", immich_connected = false, error }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    });
 
     app.Logger.LogInformation("ImmichMCP server starting on port {Port}", port);
     app.Logger.LogInformation("MCP endpoint available at: http://localhost:{Port}/mcp", port);
@@ -250,5 +262,71 @@ static class McpServerBuilderToolModeExtensions
         return useToolGateway
             ? builder.WithImmichToolGateway()
             : builder.WithToolsFromAssembly();
+    }
+}
+
+/// <summary>
+/// Caches the result of the last real Immich connectivity check so that frequent
+/// readiness probes (e.g. Kubernetes hitting <c>/health/ready</c> every few seconds)
+/// don't each translate into a live call to Immich. A new ping is only issued once
+/// <see cref="CacheDurationSeconds"/> have elapsed since the previous one; callers that
+/// arrive within the cache window get the last known result immediately, and callers
+/// that arrive while a refresh is already running share that same refresh instead of
+/// each starting their own.
+/// </summary>
+sealed class ReadinessCache
+{
+    private const int CacheDurationSeconds = 10;
+    private const int PingTimeoutSeconds = 5;
+
+    private readonly Lock _gate = new();
+    private DateTime _lastCheckedUtc = DateTime.MinValue;
+    private (bool Success, string? Version, string? Error) _lastResult = (false, null, "Not checked yet");
+    private Task<(bool Success, string? Version, string? Error)>? _refreshInFlight;
+
+    public Task<(bool Success, string? Version, string? Error)> GetOrRefreshAsync(ImmichClient client, CancellationToken cancellationToken)
+    {
+        Task<(bool Success, string? Version, string? Error)> refresh;
+        lock (_gate)
+        {
+            if (DateTime.UtcNow - _lastCheckedUtc < TimeSpan.FromSeconds(CacheDurationSeconds))
+            {
+                return Task.FromResult(_lastResult);
+            }
+
+            refresh = _refreshInFlight ??= RefreshAsync(client);
+        }
+
+        // WaitAsync only stops this caller from waiting on cancellation; it never cancels the
+        // shared refresh itself, so a caller aborting (e.g. a probe timing out) can't poison the
+        // cache with a result other callers are still legitimately waiting on.
+        return refresh.WaitAsync(cancellationToken);
+    }
+
+    private async Task<(bool Success, string? Version, string? Error)> RefreshAsync(ImmichClient client)
+    {
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(PingTimeoutSeconds));
+
+        (bool Success, string? Version, string? Error) result;
+        try
+        {
+            var (success, info, error) = await client.PingAsync(timeoutCts.Token).ConfigureAwait(false);
+            result = success
+                ? (true, info?.Version, null)
+                : (false, null, error ?? "Ping failed");
+        }
+        catch (OperationCanceledException)
+        {
+            result = (false, null, "Timed out waiting for Immich to respond");
+        }
+
+        lock (_gate)
+        {
+            _lastCheckedUtc = DateTime.UtcNow;
+            _lastResult = result;
+            _refreshInFlight = null;
+        }
+
+        return result;
     }
 }
