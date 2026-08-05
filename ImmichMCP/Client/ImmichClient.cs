@@ -65,6 +65,12 @@ public class ImmichClient
 
             return (false, null, $"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}");
         }
+        catch (OperationCanceledException)
+        {
+            // Let cancellation (caller abort or timeout) propagate; callers distinguish the two
+            // via their own token rather than have it folded into a generic failure result here.
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to ping Immich API");

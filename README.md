@@ -59,8 +59,9 @@ ImmichMCP is published as a container image at `ghcr.io/barryw/immichmcp`. Run i
 host containers — Docker, Docker Compose, or Kubernetes.
 
 - Set `IMMICH_BASE_URL` and `IMMICH_API_KEY` (see [Environment Variables](#environment-variables)).
-- Expose the HTTP port (default `5000`). The MCP endpoint is served at `/mcp` and a health check
-  at `/health`.
+- Expose the HTTP port (default `5000`). The MCP endpoint is served at `/mcp`. Two health
+  endpoints are available: `/health` (liveness, use for restarts) and `/health/ready`
+  (readiness, pings Immich and returns `503` if unreachable, use for traffic routing).
 - For remote/HTTP clients, set `IMMICH_TOOL_MODE=gateway` so clients enable tool categories on
   demand instead of loading all tools up front.
 

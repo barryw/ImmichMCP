@@ -18,6 +18,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
+      # Liveness-style check: only confirms the process is up. Compose has no separate
+      # readiness concept, but /health/ready is also available if you want a stricter
+      # check that verifies connectivity to Immich (e.g. by swapping the path below).
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
       timeout: 10s
