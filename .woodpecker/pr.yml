@@ -17,16 +17,42 @@ steps:
   - name: commitlint
     image: node:22-alpine
     commands:
+      # node:22-alpine ships without git. Without this the git log below fails, the
+      # loop reads nothing, and the step reports success having checked nothing.
+      - apk add --no-cache git
       - npm install -g @commitlint/cli @commitlint/config-conventional
       - |
         echo "module.exports = { extends: ['@commitlint/config-conventional'] };" > commitlint.config.js
       - |
-        # Check all commits in the PR
-        git log --format=%s origin/main..HEAD | while read -r msg; do
+        set -eu
+
+        git rev-parse --verify origin/main >/dev/null 2>&1 || git fetch -q origin main
+
+        BASE=$(git merge-base origin/main HEAD)
+        git log --format=%s "$BASE"..HEAD > /tmp/commit-subjects
+
+        COUNT=$(wc -l < /tmp/commit-subjects | tr -d ' ')
+        if [ "$COUNT" -eq 0 ]; then
+          echo "No commits found between origin/main and HEAD; refusing to report success"
+          exit 1
+        fi
+
+        echo "Checking $COUNT commit subject(s)"
+
+        # Read from a file rather than a pipe so the failure flag survives the loop,
+        # and report every bad subject instead of stopping at the first.
+        FAILED=0
+        while IFS= read -r msg; do
           echo "Checking: $msg"
-          echo "$msg" | commitlint || exit 1
-        done
-      - echo "All commits follow conventional commit format"
+          echo "$msg" | commitlint || FAILED=1
+        done < /tmp/commit-subjects
+
+        if [ "$FAILED" -ne 0 ]; then
+          echo "One or more commit subjects are not conventional commits"
+          exit 1
+        fi
+
+        echo "All commits follow conventional commit format"
 
   - name: build-and-test
     image: mcr.microsoft.com/dotnet/sdk:10.0
