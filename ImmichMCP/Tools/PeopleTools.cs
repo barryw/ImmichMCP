@@ -23,7 +23,7 @@ public static class PeopleTools
         [Description("Page number (default: 1)")] int page = 1,
         [Description("Page size (default: 25, max: 100)")] int size = 25)
     {
-        size = Math.Min(Math.Max(size, 1), 100);
+        size = ClampPageSize(size, 100);
         page = Math.Max(page, 1);
 
         var result = await client.GetPeopleAsync(withHidden, page, size).ConfigureAwait(false);
@@ -138,16 +138,9 @@ public static class PeopleTools
         [Description("Source person IDs to merge from (comma-separated UUIDs)")] string sourceIds,
         [Description("Must be true to confirm merge")] bool confirm = false)
     {
-        var ids = ParseStringArray(sourceIds);
-
-        if (ids == null || ids.Length == 0)
+        if (RequireIds(sourceIds, client.BaseUrl, "source person IDs", out var ids) is { } idsError)
         {
-            var errorResponse = McpErrorResponse.Create(
-                ErrorCodes.Validation,
-                "No valid source person IDs provided",
-                meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }
-            );
-            return JsonSerializer.Serialize(errorResponse);
+            return idsError;
         }
 
         if (!confirm)
@@ -210,7 +203,7 @@ public static class PeopleTools
         [Description("Page number (default: 1)")] int page = 1,
         [Description("Page size (default: 25, max: 100)")] int size = 25)
     {
-        size = Math.Min(Math.Max(size, 1), 100);
+        size = ClampPageSize(size, 100);
         page = Math.Max(page, 1);
 
         var result = await client.SearchPersonAssetsAsync(personId, page, size).ConfigureAwait(false);

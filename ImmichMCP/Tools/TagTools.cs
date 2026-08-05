@@ -192,16 +192,9 @@ public static class TagTools
         [Description("Tag ID (UUID)")] string tagId,
         [Description("Asset IDs to tag (comma-separated UUIDs)")] string assetIds)
     {
-        var ids = ParseStringArray(assetIds);
-
-        if (ids == null || ids.Length == 0)
+        if (RequireIds(assetIds, client.BaseUrl, "asset IDs", out var ids) is { } idsError)
         {
-            var errorResponse = McpErrorResponse.Create(
-                ErrorCodes.Validation,
-                "No valid asset IDs provided",
-                meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }
-            );
-            return JsonSerializer.Serialize(errorResponse);
+            return idsError;
         }
 
         var result = await client.TagAssetsAsync(tagId, ids).ConfigureAwait(false);
@@ -239,16 +232,9 @@ public static class TagTools
         [Description("Tag ID (UUID)")] string tagId,
         [Description("Asset IDs to untag (comma-separated UUIDs)")] string assetIds)
     {
-        var ids = ParseStringArray(assetIds);
-
-        if (ids == null || ids.Length == 0)
+        if (RequireIds(assetIds, client.BaseUrl, "asset IDs", out var ids) is { } idsError)
         {
-            var errorResponse = McpErrorResponse.Create(
-                ErrorCodes.Validation,
-                "No valid asset IDs provided",
-                meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }
-            );
-            return JsonSerializer.Serialize(errorResponse);
+            return idsError;
         }
 
         var result = await client.UntagAssetsAsync(tagId, ids).ConfigureAwait(false);

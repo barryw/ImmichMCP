@@ -1,3 +1,5 @@
+using ImmichMCP.Models.Common;
+
 namespace ImmichMCP.Utils;
 
 /// <summary>
@@ -16,6 +18,33 @@ public static class ParsingHelpers
             return null;
 
         return input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    /// <summary>
+    /// Clamps a requested page size to at least 1 and at most <paramref name="max"/>.
+    /// </summary>
+    public static int ClampPageSize(int requested, int max) => Math.Clamp(requested, 1, max);
+
+    /// <summary>
+    /// Parses a comma-separated ID list and returns a ready-to-serialize validation error
+    /// string when empty; returns null (with <paramref name="ids"/> populated) otherwise.
+    /// </summary>
+    /// <param name="csv">Comma-separated ID list (e.g., "id1,id2,id3")</param>
+    /// <param name="baseUrl">Immich base URL to include in the error response's meta</param>
+    /// <param name="entityLabel">Label describing the missing IDs, e.g. "asset IDs" or "source person IDs"</param>
+    /// <param name="ids">Populated with the parsed IDs (empty array if none)</param>
+    /// <returns>A serialized <see cref="McpErrorResponse"/> when <paramref name="ids"/> is empty; otherwise null</returns>
+    public static string? RequireIds(string? csv, string baseUrl, string entityLabel, out string[] ids)
+    {
+        ids = ParseStringArray(csv) ?? [];
+        if (ids.Length > 0)
+            return null;
+
+        var errorResponse = McpErrorResponse.Create(
+            ErrorCodes.Validation,
+            $"No valid {entityLabel} provided",
+            meta: new McpMeta { ImmichBaseUrl = baseUrl });
+        return System.Text.Json.JsonSerializer.Serialize(errorResponse);
     }
 
     /// <summary>

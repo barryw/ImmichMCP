@@ -37,10 +37,12 @@ public static class SearchTools
         [Description("Filter by original file name (partial match)")] string? originalFileName = null,
         [Description("Sort order: asc or desc")] string? order = null)
     {
+        size = ClampPageSize(size, 100);
+
         var request = new MetadataSearchRequest
         {
             Page = page,
-            Size = Math.Min(size, 100),
+            Size = size,
             Type = type?.ToUpperInvariant(),
             IsFavorite = isFavorite,
             Visibility = VisibilityFromArchived(isArchived),
@@ -107,11 +109,13 @@ public static class SearchTools
             return JsonSerializer.Serialize(errorResponse);
         }
 
+        size = ClampPageSize(size, 100);
+
         var request = new SmartSearchRequest
         {
             Query = query,
             Page = page,
-            Size = Math.Min(size, 100),
+            Size = size,
             Type = type?.ToUpperInvariant(),
             IsFavorite = isFavorite,
             Visibility = VisibilityFromArchived(isArchived),
@@ -172,11 +176,13 @@ public static class SearchTools
             return JsonSerializer.Serialize(errorResponse);
         }
 
+        size = ClampPageSize(size, 100);
+
         var request = new MetadataSearchRequest
         {
             Ocr = text,
             Page = page,
-            Size = Math.Min(size, 100),
+            Size = size,
             Type = type?.ToUpperInvariant(),
             IsFavorite = isFavorite,
             Visibility = VisibilityFromArchived(isArchived),

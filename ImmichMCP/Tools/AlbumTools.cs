@@ -154,16 +154,9 @@ public static class AlbumTools
         [Description("Album ID (UUID)")] string albumId,
         [Description("Asset IDs to add (comma-separated UUIDs)")] string assetIds)
     {
-        var ids = ParseStringArray(assetIds);
-
-        if (ids == null || ids.Length == 0)
+        if (RequireIds(assetIds, client.BaseUrl, "asset IDs", out var ids) is { } idsError)
         {
-            var errorResponse = McpErrorResponse.Create(
-                ErrorCodes.Validation,
-                "No valid asset IDs provided",
-                meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }
-            );
-            return JsonSerializer.Serialize(errorResponse);
+            return idsError;
         }
 
         var result = await client.AddAssetsToAlbumAsync(albumId, ids).ConfigureAwait(false);
@@ -201,16 +194,9 @@ public static class AlbumTools
         [Description("Album ID (UUID)")] string albumId,
         [Description("Asset IDs to remove (comma-separated UUIDs)")] string assetIds)
     {
-        var ids = ParseStringArray(assetIds);
-
-        if (ids == null || ids.Length == 0)
+        if (RequireIds(assetIds, client.BaseUrl, "asset IDs", out var ids) is { } idsError)
         {
-            var errorResponse = McpErrorResponse.Create(
-                ErrorCodes.Validation,
-                "No valid asset IDs provided",
-                meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }
-            );
-            return JsonSerializer.Serialize(errorResponse);
+            return idsError;
         }
 
         var result = await client.RemoveAssetsFromAlbumAsync(albumId, ids).ConfigureAwait(false);

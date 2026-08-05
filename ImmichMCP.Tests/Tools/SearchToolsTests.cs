@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using FluentAssertions;
 using RichardSzalay.MockHttp;
 using ImmichMCP.Tools;
@@ -116,5 +117,78 @@ public class SearchToolsTests
 
         // Assert
         result.Should().Contain("OCR search text is required");
+    }
+
+    [Fact]
+    public async Task MetadataSearch_ClampsSizeAndReflectsClampedValue_InMeta()
+    {
+        // Arrange
+        var (client, handler) = MockHttpClientFactory.CreateMockClient();
+        var searchResult = new
+        {
+            assets = new
+            {
+                total = 0,
+                count = 0,
+                items = Array.Empty<object>(),
+                nextPage = (string?)null
+            }
+        };
+
+        string? capturedRequestBody = null;
+        handler.When(HttpMethod.Post, "*/search/metadata")
+            .With(req =>
+            {
+                capturedRequestBody = req.Content!.ReadAsStringAsync().Result;
+                return true;
+            })
+            .Respond("application/json", TestFixtures.ToJson(searchResult));
+
+        // Act
+        var result = await SearchTools.MetadataSearch(client, size: 0);
+
+        // Assert: the size sent upstream and the size echoed in meta must agree,
+        // otherwise callers doing pagination math see a page_size that doesn't match what was requested.
+        capturedRequestBody.Should().Contain("\"size\":1");
+
+        using var json = JsonDocument.Parse(result);
+        var meta = json.RootElement.GetProperty("meta");
+        meta.GetProperty("page_size").GetInt32().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SmartSearch_ClampsSizeAndReflectsClampedValue_InMeta()
+    {
+        // Arrange
+        var (client, handler) = MockHttpClientFactory.CreateMockClient();
+        var searchResult = new
+        {
+            assets = new
+            {
+                total = 0,
+                count = 0,
+                items = Array.Empty<object>(),
+                nextPage = (string?)null
+            }
+        };
+
+        string? capturedRequestBody = null;
+        handler.When(HttpMethod.Post, "*/search/smart")
+            .With(req =>
+            {
+                capturedRequestBody = req.Content!.ReadAsStringAsync().Result;
+                return true;
+            })
+            .Respond("application/json", TestFixtures.ToJson(searchResult));
+
+        // Act
+        var result = await SearchTools.SmartSearch(client, query: "sunset", size: 100000);
+
+        // Assert
+        capturedRequestBody.Should().Contain("\"size\":100");
+
+        using var json = JsonDocument.Parse(result);
+        var meta = json.RootElement.GetProperty("meta");
+        meta.GetProperty("page_size").GetInt32().Should().Be(100);
     }
 }
