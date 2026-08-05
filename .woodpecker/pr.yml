@@ -26,9 +26,16 @@ steps:
       - |
         set -eu
 
-        git rev-parse --verify origin/main >/dev/null 2>&1 || git fetch -q origin main
+        # The clone is shallow, so origin/main and HEAD can end up with no reachable
+        # common ancestor. merge-base then exits non-zero printing nothing, which under
+        # set -e kills this step with no explanation. Deepen first, same as release.yml.
+        git fetch -q --unshallow origin main 2>/dev/null || git fetch -q origin main
 
-        BASE=$(git merge-base origin/main HEAD)
+        if ! BASE=$(git merge-base origin/main HEAD 2>/dev/null); then
+          echo "Could not determine a merge base between origin/main and HEAD"
+          exit 1
+        fi
+
         git log --format=%s "$BASE"..HEAD > /tmp/commit-subjects
 
         COUNT=$(wc -l < /tmp/commit-subjects | tr -d ' ')
