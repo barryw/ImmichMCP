@@ -13,7 +13,7 @@ clone:
       depth: 50
 
 steps:
-  # Validate commit messages follow conventional commits
+  # Validate the pull request title, which is what lands on main.
   - name: commitlint
     image: node:22-alpine
     commands:
@@ -21,12 +21,31 @@ steps:
       - |
         echo "module.exports = { extends: ['@commitlint/config-conventional'] };" > commitlint.config.js
       - |
-        # Check all commits in the PR
-        git log --format=%s origin/main..HEAD | while read -r msg; do
-          echo "Checking: $msg"
-          echo "$msg" | commitlint || exit 1
-        done
-      - echo "All commits follow conventional commit format"
+        set -eu
+
+        # Pull requests here are squash-merged, so individual commits are discarded
+        # and the title becomes the subject on main. That subject is what
+        # release.yml later parses to decide the version bump, so it is the thing
+        # worth enforcing. Woodpecker sets CI_COMMIT_MESSAGE to the PR title on
+        # pull_request events.
+        TITLE="${CI_COMMIT_MESSAGE:-}"
+        if [ -z "$TITLE" ]; then
+          echo "CI_COMMIT_MESSAGE is empty; cannot determine the pull request title"
+          exit 1
+        fi
+
+        SUBJECT=$(printf '%s\n' "$TITLE" | head -1)
+        echo "Checking pull request title: $SUBJECT"
+
+        if ! printf '%s\n' "$SUBJECT" | commitlint; then
+          echo
+          echo "The pull request title must be a conventional commit, for example:"
+          echo "  fix(tools): report the page size actually used"
+          echo "  feat(health): split liveness from readiness"
+          exit 1
+        fi
+
+        echo "Pull request title follows conventional commit format"
 
   - name: build-and-test
     image: mcr.microsoft.com/dotnet/sdk:10.0
