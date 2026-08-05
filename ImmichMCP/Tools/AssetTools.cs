@@ -126,7 +126,7 @@ public static class AssetTools
         [Description("Filter by assets updated before this date (ISO format)")] string? updatedBefore = null)
     {
         var assets = await client.GetAssetsAsync(
-            size: Math.Min(size, 1000),
+            size: ClampPageSize(size, 1000),
             isFavorite: isFavorite,
             isArchived: isArchived,
             isTrashed: isTrashed,
@@ -557,16 +557,9 @@ public static class AssetTools
         [Description("Dry run mode - shows what would change without applying")] bool dryRun = true,
         [Description("Must be true to execute the operation")] bool confirm = false)
     {
-        var ids = ParseStringArray(assetIds);
-
-        if (ids == null || ids.Length == 0)
+        if (RequireIds(assetIds, client.BaseUrl, "asset IDs", out var ids) is { } idsError)
         {
-            var errorResponse = McpErrorResponse.Create(
-                ErrorCodes.Validation,
-                "No valid asset IDs provided",
-                meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }
-            );
-            return JsonSerializer.Serialize(errorResponse);
+            return idsError;
         }
 
         if (dryRun || !confirm)
@@ -639,16 +632,9 @@ public static class AssetTools
         [Description("Must be true to confirm deletion")] bool confirm = false,
         [Description("Deprecated - omit. When true, forces a preview even if confirm=true.")] bool? dryRun = null)
     {
-        var ids = ParseStringArray(assetIds);
-
-        if (ids == null || ids.Length == 0)
+        if (RequireIds(assetIds, client.BaseUrl, "asset IDs", out var ids) is { } idsError)
         {
-            var errorResponse = McpErrorResponse.Create(
-                ErrorCodes.Validation,
-                "No valid asset IDs provided",
-                meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }
-            );
-            return JsonSerializer.Serialize(errorResponse);
+            return idsError;
         }
 
         // dryRun is retained, deprecated, only so callers written against the old
