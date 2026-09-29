@@ -76,6 +76,27 @@ public class AssetDownloadToolTests
     }
 
     [Fact]
+    public async Task DownloadOriginal_ReturnsEmbeddedBlob_WhenBase64ModeAndHeic()
+    {
+        // Arrange: iPhone originals are HEIC, which MCP clients cannot display as an image
+        var (client, handler) = MockHttpClientFactory.CreateMockClient(downloadMode: "base64");
+        MockAssetGet(handler, originalFileName: "IMG_4229.HEIC");
+        var heicBytes = new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 };
+        handler.When(HttpMethod.Get, $"*/assets/{AssetId}/original")
+            .Respond("image/heic", new MemoryStream(heicBytes));
+
+        // Act
+        var result = await AssetTools.DownloadOriginal(client, AssetId);
+
+        // Assert
+        result.Content.OfType<ImageContentBlock>().Should().BeEmpty();
+        var resource = result.Content.OfType<EmbeddedResourceBlock>().Should().ContainSingle().Subject;
+        var blob = resource.Resource.Should().BeOfType<BlobResourceContents>().Subject;
+        blob.MimeType.Should().Be("image/heic");
+        DecodeBase64Payload(blob.Blob.ToArray()).Should().Equal(heicBytes);
+    }
+
+    [Fact]
     public async Task DownloadOriginal_ReturnsUrlJsonOnly_WhenUrlMode()
     {
         // Arrange
