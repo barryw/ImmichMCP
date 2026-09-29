@@ -10,7 +10,7 @@ using ImmichMCP.Tools;
 namespace ImmichMCP.Tests.Integration;
 
 /// <summary>
-/// Exercises every one of the 49 MCP tools against a LIVE Immich instance.
+/// Exercises every one of the 50 MCP tools against a LIVE Immich instance.
 ///
 /// SAFETY CONTRACT (do not weaken): this test never creates, mutates, or deletes any
 /// pre-existing library data. Every mutation runs on throwaway fixtures created by the
@@ -37,7 +37,7 @@ public class ToolCoverageIntegrationTests
         "immich_ping", "immich_capabilities",
         "immich_search_metadata", "immich_search_smart", "immich_search_ocr", "immich_search_explore",
         "immich_assets_statistics", "immich_assets_list", "immich_assets_get", "immich_assets_exif",
-        "immich_assets_download_original", "immich_assets_download_thumbnail", "immich_assets_upload",
+        "immich_assets_download_original", "immich_assets_download_thumbnail", "immich_assets_save_to_path", "immich_assets_upload",
         "immich_assets_upload_from_path", "immich_assets_upload_init", "immich_assets_upload_status",
         "immich_assets_update", "immich_assets_bulk_update", "immich_assets_delete", "immich_assets_upload_authorize",
         "immich_albums_list", "immich_albums_get", "immich_albums_create", "immich_albums_update",
@@ -53,7 +53,7 @@ public class ToolCoverageIntegrationTests
     [MutationIntegrationFact]
     public async Task AllTools_ExercisedSafely_AgainstLiveImmich()
     {
-        AllToolNames.Should().HaveCount(49, "the fixed tool list must cover all 49 tools");
+        AllToolNames.Should().HaveCount(50, "the fixed tool list must cover all 50 tools");
 
         var settings = IntegrationTestSettings.Load();
         var client = settings.CreateClient();
@@ -244,6 +244,14 @@ public class ToolCoverageIntegrationTests
                 await Ok("immich_assets_exif", () => AssetTools.GetExif(client, asset1));
                 await Ok("immich_assets_download_original", async () => FirstText(await AssetTools.DownloadOriginal(client, asset1)));
                 await Ok("immich_assets_download_thumbnail", async () => FirstText(await AssetTools.DownloadThumbnail(client, asset1)));
+                var saveDir = Path.Combine(Path.GetTempPath(), $"mcp-tool-test-save-{Guid.NewGuid():N}");
+                try
+                {
+                    await Ok("immich_assets_save_to_path", () => AssetTools.SaveToPath(client, asset1, saveDir),
+                        r => r.GetProperty("saved").GetInt32() == 1 &&
+                             File.ReadAllBytes(Path.Combine(saveDir, r.GetProperty("files")[0].GetProperty("file").GetString()!)).SequenceEqual(Png1));
+                }
+                finally { try { Directory.Delete(saveDir, recursive: true); } catch { /* ignore */ } }
                 await Ok("immich_assets_update", () => AssetTools.Update(client, asset1, isFavorite: true, description: "mcp tool test"));
                 await Ok("immich_assets_bulk_update", () => AssetTools.BulkUpdate(client, asset1, isFavorite: false, dryRun: false, confirm: true));
             }

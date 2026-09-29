@@ -13,7 +13,8 @@ public static class TestFixtures
         string type = "IMAGE",
         string originalFileName = "test.jpg",
         bool isFavorite = false,
-        bool isArchived = false)
+        bool isArchived = false,
+        string checksum = "abc123")
     {
         return new Asset
         {
@@ -34,7 +35,7 @@ public static class TestFixtures
             HasMetadata = true,
             Duration = null,
             Visibility = isArchived ? "archive" : "timeline",
-            Checksum = "abc123",
+            Checksum = checksum,
             Resized = true,
             ExifInfo = new ExifInfo
             {

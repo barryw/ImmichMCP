@@ -15,7 +15,7 @@ public class ImmichToolGatewayTests
         using var services = CreateServices();
         var registry = services.GetRequiredService<ImmichToolRegistry>();
 
-        registry.Tools.Should().HaveCount(49);
+        registry.Tools.Should().HaveCount(50);
         registry.Categories.Should().BeEquivalentTo(
             "activities",
             "albums",
@@ -144,6 +144,7 @@ public class ImmichToolGatewayTests
         readTools.Should().NotBeEmpty();
         readTools.Should().OnlyContain(name => registry.Tools.Single(t => t.Name == name).IsReadOnly);
         readTools.Should().NotContain("immich_assets_delete");
+        readTools.Should().NotContain("immich_assets_save_to_path", "it writes files on the server host");
     }
 
     [Fact]

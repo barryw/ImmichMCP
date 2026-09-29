@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
@@ -45,6 +46,10 @@ public class ImmichClient
     public string BaseUrl => _options.BaseUrl;
 
     public string DownloadMode => _options.DownloadMode;
+
+    public string? SaveRootDirectory => _options.SaveRootDirectory;
+
+    public bool SaveToPathEnabled => _options.SaveToPathEnabled;
 
     #region Health & Status
 
@@ -344,6 +349,63 @@ public class ImmichClient
     /// </summary>
     public async Task<(byte[] Bytes, string MimeType)> DownloadAssetOriginalAsync(string id, CancellationToken cancellationToken = default)
         => await DownloadBytesAsync($"api/assets/{id}/original", cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// Streams an asset rendition to a local file: "original" is the uploaded file,
+    /// "fullsize", "preview" and "thumbnail" are images rendered by the server.
+    /// <paramref name="resolveTargetPath"/> receives the served media type and returns the
+    /// target path, so a file extension can follow what the server actually sent. The body
+    /// goes to a temporary ".part" file that is moved into place only once it is complete.
+    /// </summary>
+    public async Task<AssetFileDownload> DownloadAssetToFileAsync(
+        string id,
+        string size,
+        Func<string, string> resolveTargetPath,
+        bool overwrite,
+        CancellationToken cancellationToken = default)
+    {
+        var url = size == "original"
+            ? $"api/assets/{id}/original"
+            : $"api/assets/{id}/thumbnail?size={size}";
+
+        using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await ImmichApiException.FromResponseAsync(response, "GET", url, cancellationToken).ConfigureAwait(false);
+        }
+
+        var mimeType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+        var targetPath = resolveTargetPath(mimeType);
+        var partPath = targetPath + ".part";
+
+        using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+        long bytes = 0;
+        try
+        {
+            await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
+            await using (var target = new FileStream(partPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+            {
+                var chunk = new byte[81920];
+                int read;
+                while ((read = await source.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
+                {
+                    sha1.AppendData(chunk, 0, read);
+                    await target.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                    bytes += read;
+                }
+            }
+
+            File.Move(partPath, targetPath, overwrite);
+        }
+        catch
+        {
+            try { File.Delete(partPath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            throw;
+        }
+
+        return new AssetFileDownload(targetPath, bytes, mimeType, Convert.ToBase64String(sha1.GetHashAndReset()));
+    }
 
     #endregion
 

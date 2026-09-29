@@ -204,6 +204,12 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
         options.MaxInlineDownloadBytes = Environment.GetEnvironmentVariable("MAX_INLINE_DOWNLOAD_BYTES") is string maxInlineStr && long.TryParse(maxInlineStr, out var maxInline)
             ? maxInline
             : configuration.GetValue<long?>("Immich:MaxInlineDownloadBytes") ?? 25 * 1024 * 1024;
+
+        options.SaveRootDirectory = Environment.GetEnvironmentVariable("SAVE_ROOT_DIR")
+                                    ?? configuration.GetValue<string>("Immich:SaveRootDir");
+
+        // Over HTTP the files would land on the server, so saving is opt-in there.
+        options.SaveToPathEnabled = useStdio || !string.IsNullOrWhiteSpace(options.SaveRootDirectory);
     });
 
     // Configure retry policy for transient errors
