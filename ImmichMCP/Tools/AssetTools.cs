@@ -358,9 +358,16 @@ public static class AssetTools
         };
     }
 
+    // Image formats MCP clients can display. Anything else, e.g. the HEIC originals
+    // iPhones produce, is returned as an embedded resource instead of an image block.
+    private static readonly HashSet<string> InlineImageMimeTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/jpeg", "image/png", "image/gif", "image/webp"
+    };
+
     private static CallToolResult BinaryResult(string json, byte[] bytes, string mimeType, string? uri)
     {
-        ContentBlock binaryBlock = mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+        ContentBlock binaryBlock = InlineImageMimeTypes.Contains(mimeType)
             ? ImageContentBlock.FromBytes(bytes, mimeType)
             : new EmbeddedResourceBlock
             {
