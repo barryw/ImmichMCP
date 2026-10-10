@@ -12,7 +12,9 @@ public static class MockHttpClientFactory
         string baseUrl = "https://photos.example.com",
         string apiKey = "test-api-key",
         string downloadMode = "url",
-        long maxInlineDownloadBytes = 25 * 1024 * 1024)
+        long maxInlineDownloadBytes = 25 * 1024 * 1024,
+        string? saveRootDirectory = null,
+        bool saveToPathEnabled = true)
     {
         var mockHandler = new MockHttpMessageHandler();
         var httpClient = mockHandler.ToHttpClient();
@@ -25,7 +27,9 @@ public static class MockHttpClientFactory
             ApiKey = apiKey,
             MaxPageSize = 100,
             DownloadMode = downloadMode,
-            MaxInlineDownloadBytes = maxInlineDownloadBytes
+            MaxInlineDownloadBytes = maxInlineDownloadBytes,
+            SaveRootDirectory = saveRootDirectory,
+            SaveToPathEnabled = saveToPathEnabled
         });
 
         var logger = new LoggerFactory().CreateLogger<ImmichClient>();

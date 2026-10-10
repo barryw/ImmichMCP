@@ -36,7 +36,7 @@ dotnet test ImmichMCP.Tests/ImmichMCP.Tests.csproj --filter "Category=Integratio
 ```
 
 Mutation coverage (create/update/delete paths) is disabled by default. Enable it explicitly
-to also run the full 49-tool smoke:
+to also run the full 50-tool smoke:
 
 ```bash
 export IMMICH_INTEGRATION_MUTATION_TESTS=true
@@ -46,7 +46,7 @@ dotnet test ImmichMCP.Tests/ImmichMCP.Tests.csproj --filter "Category=Integratio
 (If your Immich runs somewhere not directly reachable, point `IMMICH_BASE_URL` at it however
 you normally reach it — e.g. a port-forward or tunnel — before running the tests.)
 
-With mutation coverage enabled, `ToolCoverageIntegrationTests` exercises **all 49 tools**
+With mutation coverage enabled, `ToolCoverageIntegrationTests` exercises **all 50 tools**
 against the live server. It is strictly non-destructive to existing data: every mutation
 runs on throwaway fixtures the test creates (uploaded PNGs, an album, a tag, shared links,
 an activity) and teardown deletes only those; the two tools that would mutate real,
@@ -115,6 +115,7 @@ docker run -e IMMICH_BASE_URL="https://photos.example.com" \
 | `MCP_LOG_LEVEL` | No | `Information` | Logging level |
 | `DOWNLOAD_MODE` | No | `url` | `url` returns URLs, `base64` returns the file content inline as MCP image/resource content |
 | `MAX_INLINE_DOWNLOAD_BYTES` | No | `26214400` | Max asset size returned inline with `DOWNLOAD_MODE=base64`; larger assets get a `PAYLOAD_TOO_LARGE` error that includes the download URL |
+| `SAVE_ROOT_DIR` | No | - | Directory `immich_assets_save_to_path` may write into (and below). Over HTTP the tool is disabled unless this is set |
 | `MAX_PAGE_SIZE` | No | `100` | Maximum items per page |
 | `MCP_PORT` | No | `5000` | HTTP server port |
 | `IMMICH_TOOL_MODE` | No | `static` | `static` exposes all tools; `gateway` exposes `immich_tools_list` and `immich_tools_enable` first |
@@ -174,6 +175,7 @@ Or with Docker:
 | `immich_assets_exif` | Get EXIF data for an asset |
 | `immich_assets_download_original` | Get download URL for original (or inline content with `DOWNLOAD_MODE=base64`) |
 | `immich_assets_download_thumbnail` | Get thumbnail/preview URLs (or inline preview image with `DOWNLOAD_MODE=base64`) |
+| `immich_assets_save_to_path` | Save originals (checksum-verified) or rendered previews of up to 500 assets into a local directory on the MCP server host; re-runs skip files already there |
 | `immich_assets_upload` | Upload asset (base64) |
 | `immich_assets_upload_from_path` | Upload from local file path |
 | `immich_assets_upload_authorize` | Mint a short-lived, upload-only URL so a client can upload local files **directly** to Immich (no API key exposed) |

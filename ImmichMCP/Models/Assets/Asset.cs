@@ -317,6 +317,15 @@ public record AssetDownloadInfo
 }
 
 /// <summary>
+/// An asset rendition that was streamed to a local file.
+/// </summary>
+/// <param name="Path">Absolute path of the written file.</param>
+/// <param name="Bytes">Number of bytes written.</param>
+/// <param name="MimeType">Media type the server sent.</param>
+/// <param name="Sha1Base64">Base64 SHA-1 of the content, comparable to <see cref="Asset.Checksum"/> for originals.</param>
+public record AssetFileDownload(string Path, long Bytes, string MimeType, string Sha1Base64);
+
+/// <summary>
 /// Lightweight asset summary for search results.
 /// </summary>
 public record AssetSummary

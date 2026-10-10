@@ -29,4 +29,16 @@ public class ImmichOptions
     /// Maximum asset size (in bytes) returned inline when DownloadMode is "base64".
     /// </summary>
     public long MaxInlineDownloadBytes { get; set; } = 25 * 1024 * 1024;
+
+    /// <summary>
+    /// Optional directory that immich_assets_save_to_path is confined to. When set, every
+    /// target directory must be this directory or one below it.
+    /// </summary>
+    public string? SaveRootDirectory { get; set; }
+
+    /// <summary>
+    /// Whether immich_assets_save_to_path may write files. The server turns it on for stdio,
+    /// and for HTTP only when SaveRootDirectory is set.
+    /// </summary>
+    public bool SaveToPathEnabled { get; set; } = true;
 }

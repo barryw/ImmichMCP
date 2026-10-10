@@ -1,5 +1,7 @@
 using System.ComponentModel;
+using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using ImmichMCP.Client;
@@ -321,6 +323,290 @@ public static class AssetTools
         );
         return BinaryResult(JsonSerializer.Serialize(response), bytes, mimeType, downloadInfo.PreviewUrl);
     }
+
+    private static readonly string[] SaveSizes = ["original", "fullsize", "preview", "thumbnail"];
+    private const int MaxSaveBatch = 500;
+    private const int SaveParallelism = 4;
+
+    [McpServerTool(Name = "immich_assets_save_to_path", Idempotent = true)]
+    [Description(
+        "Save assets from Immich into a local directory on the machine running this MCP server and return the " +
+        "file names, so they can be opened or processed directly. size='original' (default) writes the uploaded " +
+        "file under its original name and verifies it against the Immich checksum; 'fullsize', 'preview' and " +
+        "'thumbnail' write server-rendered images named <name>_<id8>_<size>.<ext>. Files already present with the " +
+        "same content are skipped, so re-running is safe. Available in stdio mode; over HTTP only when " +
+        "SAVE_ROOT_DIR is set. If SAVE_ROOT_DIR is set, the directory must be inside it.")]
+    public static async Task<string> SaveToPath(
+        ImmichClient client,
+        [Description("Asset IDs (comma-separated UUIDs, at most 500 per call)")] string assetIds,
+        [Description("Absolute target directory (~/ allowed); created if missing")] string directory,
+        [Description("Rendition to save: original (default), fullsize, preview or thumbnail")] string size = "original",
+        [Description("Replace files that already exist under the target name (default: false)")] bool overwrite = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (!client.SaveToPathEnabled)
+        {
+            return ValidationError(client, "Saving files is disabled when the server runs over HTTP. Set SAVE_ROOT_DIR to enable it.");
+        }
+
+        if (RequireIds(assetIds, client.BaseUrl, "asset IDs", out var parsedIds) is { } idsError)
+        {
+            return idsError;
+        }
+
+        var ids = parsedIds.Distinct(StringComparer.Ordinal).ToArray();
+        if (ids.Length > MaxSaveBatch)
+        {
+            return ValidationError(client, $"At most {MaxSaveBatch} asset IDs per call, got {ids.Length}. Split the list into batches.");
+        }
+
+        size = (size ?? "original").Trim().ToLowerInvariant();
+        if (!SaveSizes.Contains(size))
+        {
+            return ValidationError(client, $"Unknown size '{size}'. Use one of: {string.Join(", ", SaveSizes)}.");
+        }
+
+        if (ResolveSaveDirectory(directory, client.SaveRootDirectory, out var targetDir) is { } directoryError)
+        {
+            return ValidationError(client, directoryError);
+        }
+
+        try
+        {
+            Directory.CreateDirectory(targetDir);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return ValidationError(client, $"Cannot create directory {targetDir}: {ex.Message}");
+        }
+
+        var parallel = new ParallelOptions { MaxDegreeOfParallelism = SaveParallelism, CancellationToken = cancellationToken };
+        var assets = new Asset?[ids.Length];
+        var files = new SavedFile[ids.Length];
+
+        await Parallel.ForEachAsync(Enumerable.Range(0, ids.Length), parallel, async (i, ct) =>
+        {
+            try
+            {
+                assets[i] = await client.GetAssetAsync(ids[i], ct).ConfigureAwait(false);
+                if (assets[i] == null)
+                {
+                    files[i] = SavedFile.Failed(ids[i], "not_found", "Asset not found");
+                }
+            }
+            catch (Exception ex) when (ex is ImmichApiException or HttpRequestException)
+            {
+                files[i] = SavedFile.Failed(ids[i], "failed", ex.Message);
+            }
+        }).ConfigureAwait(false);
+
+        // Target names are chosen up front, one asset after the other, so two assets that
+        // share a file name within one batch never race for the same path.
+        var plans = new List<SavePlan>();
+        var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < ids.Length; i++)
+        {
+            if (assets[i] is not { } asset)
+            {
+                continue;
+            }
+
+            var plan = PlanSave(asset, i, size, targetDir, overwrite, claimed);
+            if (plan.Done is { } done)
+            {
+                files[i] = done;
+            }
+            else
+            {
+                plans.Add(plan);
+            }
+        }
+
+        await Parallel.ForEachAsync(plans, parallel, async (plan, ct) =>
+        {
+            try
+            {
+                var download = await client.DownloadAssetToFileAsync(
+                    plan.Asset.Id,
+                    size,
+                    mimeType => plan.TargetPath ?? Path.Combine(targetDir, plan.NamePrefix + ExtensionFor(mimeType)),
+                    overwrite,
+                    ct).ConfigureAwait(false);
+
+                bool? verified = size == "original" && !string.IsNullOrEmpty(plan.Asset.Checksum)
+                    ? download.Sha1Base64 == plan.Asset.Checksum
+                    : null;
+                files[plan.Index] = SavedFile.Saved(plan.Asset.Id, Path.GetFileName(download.Path), download.Bytes, verified);
+            }
+            catch (Exception ex) when (ex is ImmichApiException or HttpRequestException or IOException or UnauthorizedAccessException)
+            {
+                files[plan.Index] = SavedFile.Failed(plan.Asset.Id, "failed", ex.Message);
+            }
+        }).ConfigureAwait(false);
+
+        var saved = files.Count(f => f.Status == "saved");
+        var existing = files.Count(f => f.Status == "exists");
+        var payload = new
+        {
+            directory = targetDir,
+            size,
+            saved,
+            existing,
+            failed = files.Length - saved - existing,
+            files
+        };
+
+        if (saved + existing == 0)
+        {
+            return JsonSerializer.Serialize(McpErrorResponse.Create(
+                files.All(f => f.Status == "not_found") ? ErrorCodes.NotFound : ErrorCodes.UpstreamError,
+                "No asset could be saved.",
+                details: payload,
+                meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }));
+        }
+
+        return JsonSerializer.Serialize(McpResponse<object>.Success(
+            payload,
+            new McpMeta { Total = files.Length, ImmichBaseUrl = client.BaseUrl }));
+    }
+
+    private sealed record SavePlan(int Index, Asset Asset, string? TargetPath, string? NamePrefix, SavedFile? Done);
+
+    private sealed record SavedFile(
+        [property: JsonPropertyName("id")] string Id,
+        [property: JsonPropertyName("file"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? File,
+        [property: JsonPropertyName("status")] string Status,
+        [property: JsonPropertyName("bytes"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? Bytes,
+        [property: JsonPropertyName("checksum_verified"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? ChecksumVerified,
+        [property: JsonPropertyName("error"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Error)
+    {
+        public static SavedFile Saved(string id, string file, long bytes, bool? verified) => new(id, file, "saved", bytes, verified, null);
+
+        public static SavedFile Existing(string id, string file, long bytes) => new(id, file, "exists", bytes, null, null);
+
+        public static SavedFile Failed(string id, string status, string error, string? file = null) => new(id, file, status, null, null, error);
+    }
+
+    private static SavePlan PlanSave(Asset asset, int index, string size, string directory, bool overwrite, HashSet<string> claimed)
+    {
+        var id8 = asset.Id.Length > 8 ? asset.Id[..8] : asset.Id;
+        var fileName = SafeFileName(asset.OriginalFileName, asset.Id);
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+
+        if (size != "original")
+        {
+            // Rendered images carry the asset ID in their name, so they cannot collide. The
+            // extension follows the served media type, so look for any earlier copy.
+            var prefix = $"{stem}_{id8}_{size}";
+            var earlier = overwrite
+                ? null
+                : Directory.EnumerateFiles(directory).FirstOrDefault(f =>
+                    Path.GetFileName(f).StartsWith(prefix + ".", StringComparison.Ordinal) &&
+                    !f.EndsWith(".part", StringComparison.Ordinal));
+            return earlier == null
+                ? new SavePlan(index, asset, null, prefix, null)
+                : new SavePlan(index, asset, null, prefix, SavedFile.Existing(asset.Id, Path.GetFileName(earlier), new FileInfo(earlier).Length));
+        }
+
+        foreach (var candidate in new[] { fileName, $"{stem}_{id8}{Path.GetExtension(fileName)}" })
+        {
+            var path = Path.Combine(directory, candidate);
+            if (!claimed.Add(path))
+            {
+                continue; // an earlier asset in this batch already uses the name
+            }
+
+            if (overwrite || !File.Exists(path))
+            {
+                return new SavePlan(index, asset, path, null, null);
+            }
+
+            if (HasChecksum(path, asset.Checksum))
+            {
+                return new SavePlan(index, asset, path, null, SavedFile.Existing(asset.Id, candidate, new FileInfo(path).Length));
+            }
+        }
+
+        return new SavePlan(index, asset, null, null, SavedFile.Failed(asset.Id, "conflict",
+            "Files with this name and its ID-suffixed variant already exist with different content; pass overwrite=true to replace them.",
+            fileName));
+    }
+
+    private static bool HasChecksum(string path, string? checksum)
+    {
+        if (string.IsNullOrEmpty(checksum))
+        {
+            return false;
+        }
+
+        using var stream = File.OpenRead(path);
+        return Convert.ToBase64String(SHA1.HashData(stream)) == checksum;
+    }
+
+    /// <summary>
+    /// File name from Immich metadata, reduced to a single path segment so a crafted
+    /// original file name can never point outside the target directory.
+    /// </summary>
+    private static string SafeFileName(string? originalFileName, string fallback)
+    {
+        var name = Path.GetFileName((originalFileName ?? string.Empty).Replace('\\', '/'));
+        var invalid = Path.GetInvalidFileNameChars();
+        name = new string(name.Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim().TrimStart('.');
+        return name.Length == 0 ? fallback : name;
+    }
+
+    private static string ExtensionFor(string mimeType) => mimeType.ToLowerInvariant() switch
+    {
+        "image/jpeg" => ".jpg",
+        "image/webp" => ".webp",
+        "image/png" => ".png",
+        "image/avif" => ".avif",
+        "image/heic" or "image/heif" => ".heic",
+        _ => ".bin"
+    };
+
+    private static string? ResolveSaveDirectory(string? directory, string? saveRoot, out string fullPath)
+    {
+        fullPath = string.Empty;
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return "directory is required";
+        }
+
+        var expanded = ExpandHome(directory.Trim());
+        if (!Path.IsPathRooted(expanded))
+        {
+            return "directory must be an absolute path";
+        }
+
+        fullPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(expanded));
+        if (string.IsNullOrWhiteSpace(saveRoot))
+        {
+            return null;
+        }
+
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(ExpandHome(saveRoot.Trim())));
+        var inside = fullPath.Equals(root, StringComparison.Ordinal) ||
+                     fullPath.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+        return inside ? null : $"directory must be inside SAVE_ROOT_DIR ({root})";
+    }
+
+    private static string ExpandHome(string path)
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (path == "~")
+        {
+            return home;
+        }
+
+        return path.StartsWith("~/", StringComparison.Ordinal) ? Path.Combine(home, path[2..]) : path;
+    }
+
+    private static string ValidationError(ImmichClient client, string message) =>
+        JsonSerializer.Serialize(McpErrorResponse.Create(
+            ErrorCodes.Validation,
+            message,
+            meta: new McpMeta { ImmichBaseUrl = client.BaseUrl }));
 
     private static bool IsBase64Mode(ImmichClient client) =>
         string.Equals(client.DownloadMode, "base64", StringComparison.OrdinalIgnoreCase);
